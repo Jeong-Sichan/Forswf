@@ -69,6 +69,8 @@ KoRMo 설정에는 모델 전용 코드(`_configuration_kormo.py`, `_modeling_ko
 
 `srun` 계산 노드에서 먼저 모델만 4비트로 불러와 답변 하나를 생성합니다. 모델 캐시는 사용자 `/data`에 둡니다. 첫 실행에는 KoRMo 가중치가 다운로드되어 시간이 걸릴 수 있습니다.
 
+KoRMo 전용 코드의 `create_causal_mask` 호출은 Transformers 4.57.0의 인자 이름과 필수 인자에 맞지 않습니다. 프로젝트의 `kormo_compat.py`가 메모리 안에서 호출 인자만 맞춥니다. Hugging Face 캐시에 내려받은 모델 파일은 수정하지 않습니다.
+
 ```bash
 cd /data/$USER/repos/swf/Forswf
 export HF_HOME=/data/$USER/models/malmaek/hf-cache

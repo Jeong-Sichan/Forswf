@@ -3,6 +3,7 @@
 import argparse
 
 from prompting import messages, render, require_pinned_revision
+from kormo_compat import fix_causal_mask_keyword
 
 
 def main() -> None:
@@ -34,6 +35,7 @@ def main() -> None:
             bnb_4bit_compute_dtype=dtype,
         ),
     )
+    fix_causal_mask_keyword(model)
     if args.adapter:
         from peft import PeftModel
 

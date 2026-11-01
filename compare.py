@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from prompting import messages, read_examples, render, require_local_dataset, require_pinned_revision
+from kormo_compat import fix_causal_mask_keyword
 
 
 def main() -> None:
@@ -37,6 +38,7 @@ def main() -> None:
             load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=dtype
         ),
     )
+    fix_causal_mask_keyword(base)
     model = PeftModel.from_pretrained(base, args.adapter)
     model.eval()
 

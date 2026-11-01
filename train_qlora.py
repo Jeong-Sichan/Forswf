@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 
 from prompting import messages, read_examples, render, require_local_dataset, require_pinned_revision
+from kormo_compat import fix_causal_mask_keyword
 
 
 def main() -> None:
@@ -46,6 +47,7 @@ def main() -> None:
             bnb_4bit_compute_dtype=dtype,
         ),
     )
+    fix_causal_mask_keyword(model)
     model.config.use_cache = False
     model = prepare_model_for_kbit_training(model)
     model = get_peft_model(
