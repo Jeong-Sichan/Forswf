@@ -16,7 +16,6 @@ def main() -> None:
     args = parser.parse_args()
 
     require_local_dataset(args.eval)
-    require_local_dataset(args.output)
 
     import torch
     from peft import PeftModel

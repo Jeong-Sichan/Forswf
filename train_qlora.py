@@ -1,6 +1,7 @@
 """QLoRA format adaptation. Run on a GPU after checking the model license/card."""
 
 import argparse
+from pathlib import Path
 
 from prompting import messages, read_examples, render, require_local_dataset
 
@@ -15,7 +16,8 @@ def main() -> None:
     args = parser.parse_args()
 
     require_local_dataset(args.train)
-    require_local_dataset(args.output)
+    if not Path(args.output).resolve().is_relative_to("/data"):
+        raise ValueError("LoRA 모델 출력은 /data 사용자 영역에 저장해 주세요")
 
     import torch
     from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
@@ -99,7 +101,7 @@ def main() -> None:
             learning_rate=1e-4,
             warmup_ratio=0.03,
             logging_steps=5,
-            save_strategy="epoch",
+            save_strategy="no",
             gradient_checkpointing=True,
             bf16=dtype == torch.bfloat16,
             fp16=dtype == torch.float16,
