@@ -1,0 +1,78 @@
+# Seraph에서 말맥 실행
+
+이 안내는 제공받은 Seraph 튜토리얼 3~6의 저장소·Slurm 규칙에 맞춘 것입니다. `aurora-g5`에서 RTX 3090 24GB 한 장과 PyTorch `2.5.1+cu121`의 CUDA 사용을 확인했습니다. GPU가 보이는 것과 Slurm 작업 할당은 별개이므로, 실제 작업은 할당된 계산 노드에서만 실행하세요.
+
+## 저장 위치
+
+- 코드·가상환경·압축된 원본 데이터: `/data/$USER/...` (NAS)
+- 학습·평가 데이터, Hugging Face 모델 캐시, 중간 체크포인트: `/local_datasets/$USER/...` (할당받은 계산 노드의 로컬 디스크)
+- 학습과 평가 스크립트는 `/data` 경로를 데이터로 받으면 오류를 내도록 설정했습니다.
+- 로그인 노드에서는 Python 실행, 패키지 설치, 압축 해제, 대량 파일 검색을 하지 마세요.
+
+## 코드 ZIP을 서버로 옮기기
+
+이 채팅의 `malmaek-seraph-prototype.zip` 링크에서 ZIP을 개인 PC로 저장한 뒤, **개인 PC 터미널에서** 다음처럼 전송합니다. ZIP을 푸는 작업은 로그인 노드에서 하지 말고, 아래의 `srun`으로 계산 노드를 받은 뒤 수행하세요.
+
+```bash
+scp -P 30080 malmaek-seraph-prototype.zip jsc66519075@aurora.khu.ac.kr:/data/jsc66519075/repos/
+```
+
+**계산 노드에서** 코드 ZIP을 빈 작업 디렉터리에 풉니다. 기존 작업 디렉터리가 있으면 덮어쓰지 말고 먼저 내용을 확인하세요.
+
+```bash
+mkdir -p /data/$USER/repos/malmaek-prototype
+unzip -n /data/$USER/repos/malmaek-seraph-prototype.zip -d /data/$USER/repos/malmaek-prototype
+```
+
+## 1. 데이터 준비
+
+파이썬으로 사례를 작성하려면 `prepare_dataset.py`의 `TRAIN`과 `EVAL` 목록을 편집하세요. 개인 PC 또는 할당받은 계산 노드에서 아래 명령을 실행하면 학습용 JSONL 두 파일과 전송용 압축 파일이 생성됩니다. JSONL은 학습 프로그램의 데이터 저장 형식일 뿐, 사람이 직접 작성해야 하는 형식이 아닙니다. 현재 예시 2개씩은 형식 확인용입니다. 직접 검토한 학습 사례를 최소 50개 이상, 표현이 겹치지 않는 평가 사례를 별도로 준비하세요.
+
+```bash
+python prepare_dataset.py --output-dir ./prepared-data
+```
+
+생성된 `prepared-data/malmaek.tar.gz` **파일 하나**를 `/data/$USER/datasets/malmaek.tar.gz`로 업로드하세요. NAS의 압축 파일을 계산 노드에서 `/local_datasets`로 복사·압축 해제하는 단계는 `scripts/stage_dataset.sh`가 담당합니다. 데이터 로더에 NAS 경로를 전달하지 마세요.
+
+## 2. Slurm 할당과 패키지 확인
+
+로그인 노드에서 `show-assoc`, `slurm-gres-viz -i`로 본인에게 허용된 partition과 노드를 확인하세요. 튜토리얼의 `debug_ugrad`/`batch_ugrad`는 예시이며 계정별 권한이 다를 수 있습니다. 간단한 확인에는 `srun`으로 계산 노드를 받습니다.
+
+```bash
+srun --gres=gpu:1 --cpus-per-gpu=8 --mem-per-gpu=32G -p <허용된_debug_partition> --pty bash
+```
+
+**계산 노드 안에서** `nvidia-smi`와 `python -c 'import torch; print(torch.__version__, torch.cuda.is_available())'`를 확인하세요. 기존 `mlclass` 환경을 보존하려면 그 환경을 활성화한 상태에서 별도 가상환경을 사용합니다. 가상환경과 코드는 NAS에 둘 수 있지만, 대량 데이터와 모델 캐시는 로컬 디스크에 둡니다.
+
+```bash
+python -m venv --system-site-packages /data/$USER/envs/malmaek
+source /data/$USER/envs/malmaek/bin/activate
+python -c 'import torch; print(torch.__version__, torch.cuda.is_available())'
+python -m pip install -r /data/$USER/repos/malmaek-prototype/requirements-gpu.txt
+```
+
+가상환경에서 CUDA가 `False`이거나 서버의 PyTorch를 상속하지 못하면 설치를 멈추고 환경 경로를 확인하세요. KoRMo 모델 카드의 라이선스, 접근 조건, 사용 방법도 다운로드 전에 확인해야 합니다. 현재 클라우드에서는 모델 카드와 학교 서버에 직접 접근할 수 없어 모델 로딩은 아직 검증되지 않았습니다.
+
+## 3. 짧은 검증과 학습
+
+`srun` 계산 노드에서 모델을 처음 불러올 때는 캐시를 로컬에 둡니다. 학습 데이터도 먼저 로컬로 옮깁니다. 아래 예시의 `malmaek-debug-1`은 새 실행마다 다른 이름으로 바꾸세요.
+
+```bash
+export HF_HOME=/local_datasets/$USER/malmaek-debug-1/hf-cache
+bash /data/$USER/repos/malmaek-prototype/scripts/stage_dataset.sh /data/$USER/datasets/malmaek.tar.gz /local_datasets/$USER/malmaek-debug-1/data
+python /data/$USER/repos/malmaek-prototype/validate_data.py --train /local_datasets/$USER/malmaek-debug-1/data/train.jsonl --eval /local_datasets/$USER/malmaek-debug-1/data/eval.jsonl
+```
+
+시연 코드는 `python /data/$USER/repos/malmaek-prototype/demo.py`로 실행합니다. 기본 바인딩은 계산 노드의 `127.0.0.1`이며, 자신의 SSH 터널이나 승인된 내부 경로로 접속해야 합니다. `--share`는 공개 링크가 필요할 때만 사용하세요.
+
+긴 학습은 로그인 노드에서 `sbatch`로 제출합니다. 제출 전에 학습에 사용할 가상환경을 활성화하고, 작업 디렉터리에서 `logs`를 만드세요. 스크립트는 데이터 압축 파일을 로컬에 복사·해제하고, 모델 캐시와 체크포인트도 로컬에 둡니다. 완료 후 LoRA 어댑터 압축 파일과 작은 비교 결과만 NAS의 `outputs`로 돌려놓습니다.
+
+```bash
+cd /data/$USER/repos/malmaek-prototype
+source /data/$USER/envs/malmaek/bin/activate
+mkdir -p logs
+sbatch -p <허용된_batch_partition> scripts/train.slurm.sh /data/$USER/datasets/malmaek.tar.gz
+squeue -u "$USER"
+```
+
+`outputs/comparison-<job-id>.jsonl`은 자동 채점 결과가 아닙니다. [기획 범위](PROJECT.md)의 네 항목으로 사람이 원본과 조정 모델을 평가하고, 실패 사례도 기록하세요. 학습·평가 사례를 준비하지 않은 현재 ZIP만으로는 성능 개선을 주장할 수 없습니다.
