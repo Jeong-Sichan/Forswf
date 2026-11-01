@@ -15,6 +15,7 @@ def main() -> None:
     parser.add_argument("--revision", required=True, help="Pinned Hugging Face model commit SHA")
     parser.add_argument("--epochs", type=float, default=2)
     parser.add_argument("--max-length", type=int, default=1536)
+    parser.add_argument("--require-evidence", action="store_true", help="Require reviewed, source-grounded examples")
     args = parser.parse_args()
 
     require_pinned_revision(args.revision)
@@ -29,6 +30,8 @@ def main() -> None:
     if not torch.cuda.is_available():
         raise RuntimeError("QLoRA 학습에는 CUDA GPU가 필요합니다")
     rows = read_examples(args.train)
+    if args.require_evidence and any(row.get("reviewed") is not True or "evidence" not in row for row in rows):
+        raise ValueError("근거 기반 QLoRA에는 모든 사례의 reviewed=true와 evidence 목록이 필요합니다")
     if len({row["expression"].strip() for row in rows}) < 50:
         raise ValueError("서로 다른 표현 50개 미만으로 학습 결과를 주장하지 마세요. 검토한 데이터를 더 모아 주세요.")
 
@@ -68,7 +71,7 @@ def main() -> None:
             for row in rows:
                 prompt = render(
                     tokenizer,
-                    messages(row["expression"], row["situation"], row["relationship"], row["language"], row["task"]),
+                    messages(row["expression"], row["situation"], row["relationship"], row["language"], row["task"], row.get("evidence")),
                     True,
                 )
                 completion = row["answer"].strip() + tokenizer.eos_token

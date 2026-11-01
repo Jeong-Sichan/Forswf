@@ -1,5 +1,7 @@
 # Seraph에서 말맥 실행
 
+출처가 있는 문화 문서 수집→검색→KoRMo 시연→근거 기반 QLoRA의 최신 절차는 [KNOWLEDGE_PIPELINE.md](KNOWLEDGE_PIPELINE.md)를 먼저 보세요. 아래 내용은 기존 표현 해설만으로 실행하는 방법도 포함합니다.
+
 이 안내는 제공받은 Seraph 튜토리얼 3~6의 저장소·Slurm 규칙에 맞춘 것입니다. `aurora-g5`에서 RTX 3090 24GB 한 장과 PyTorch `2.5.1+cu121`의 CUDA 사용을 확인했습니다. GPU가 보이는 것과 Slurm 작업 할당은 별개이므로, 실제 작업은 할당된 계산 노드에서만 실행하세요.
 
 ## 저장 위치
@@ -61,7 +63,7 @@ python -c 'import torch; print(torch.__version__, torch.cuda.is_available())'
 python -m pip install -r requirements-gpu.txt
 ```
 
-가상환경에서 CUDA가 `False`이거나 서버의 PyTorch를 상속하지 못하면 설치를 멈추고 환경 경로를 확인하세요. KoRMo 모델 카드의 라이선스, 접근 조건, 사용 방법도 다운로드 전에 확인해야 합니다. 현재 클라우드에서는 모델 카드와 학교 서버에 직접 접근할 수 없어 모델 로딩은 아직 검증되지 않았습니다.
+가상환경에서 CUDA가 `False`이거나 서버의 PyTorch를 상속하지 못하면 설치를 멈추고 환경 경로를 확인하세요. 사용자 계산 노드에서 KoRMo-10B-sft 4비트 로딩과 영어·한국어 생성은 확인했습니다. 새 검색기·QLoRA 학습은 별도로 검증해야 합니다.
 
 KoRMo 설정에는 모델 전용 코드(`_configuration_kormo.py`, `_modeling_kormo.py`)가 있습니다. 모델 저장소 코드를 실행하기 전 해당 파일을 검토하세요. 확인한 모델 커밋은 `547fa40eeb8c69d3c5e278daf906d315c4f8e7ea`입니다. 학습 배치 작업은 `KORMO_REVISION`을 상속합니다.
 

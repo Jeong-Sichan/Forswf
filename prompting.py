@@ -56,7 +56,7 @@ def require_pinned_revision(value: str) -> None:
         raise ValueError("KoRMo revision에는 모델의 40자리 커밋 SHA가 필요합니다")
 
 
-def messages(expression: str, situation: str, relationship: str, language: str = "en", task: str = "explain") -> list[dict[str, str]]:
+def messages(expression: str, situation: str, relationship: str, language: str = "en", task: str = "explain", evidence: list[dict] | None = None) -> list[dict[str, str]]:
     if language not in LANGUAGE_RULES:
         raise ValueError("출력 언어는 en 또는 ko여야 합니다")
     if task not in TASK_RULES:
@@ -67,10 +67,20 @@ def messages(expression: str, situation: str, relationship: str, language: str =
     situation = situation.strip()[:1000] or "알 수 없음"
     relationship = relationship.strip()[:200] or "알 수 없음"
     label = "표현" if task == "explain" else "질문"
-    return [
-        {"role": "system", "content": SYSTEM + "\n" + TASK_RULES[task] + "\n" + LANGUAGE_RULES[language][task]},
-        {"role": "user", "content": f"{label}: {expression}\n상황: {situation}\n상대와의 관계: {relationship}\n답변 언어: {language}"},
-    ]
+    system = SYSTEM + "\n" + TASK_RULES[task] + "\n" + LANGUAGE_RULES[language][task]
+    user = f"{label}: {expression}\n상황: {situation}\n상대와의 관계: {relationship}\n답변 언어: {language}"
+    if evidence is not None:
+        system += "\nUse the supplied excerpts for factual cultural claims. Cite the excerpt number, e.g. [1]. If they do not support an answer, say what remains unknown. A source about a general custom does not establish what a particular person intended."
+        if evidence:
+            excerpts = []
+            for index, item in enumerate(evidence[:3], 1):
+                if any(not isinstance(item.get(key), str) or not item[key].strip() for key in ("source_id", "title", "url", "license", "text")):
+                    raise ValueError("출처 자료에 source_id/title/url/license/text가 필요합니다")
+                excerpts.append(f"[{index}] {item['title']}\nURL: {item['url']}\nExcerpt: {item['text'][:750]}")
+            user += "\n\nSource excerpts / 출처 발췌:\n" + "\n\n".join(excerpts)
+        else:
+            user += "\n\nSource excerpts / 출처 발췌: none found. Do not invent a citation."
+    return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
 def render(tokenizer, conversation: list[dict[str, str]], generation: bool) -> str:
@@ -97,6 +107,12 @@ def read_examples(path: str) -> list[dict[str, str]]:
         row.setdefault("task", "explain")
         if row["task"] not in TASK_RULES:
             raise ValueError(f"{path}:{number}: task는 explain 또는 ask여야 합니다")
+        if "evidence" in row:
+            if not isinstance(row["evidence"], list):
+                raise ValueError(f"{path}:{number}: evidence는 목록이어야 합니다")
+            for item in row["evidence"]:
+                if not isinstance(item, dict) or any(not isinstance(item.get(field), str) or not item[field].strip() for field in ("source_id", "title", "url", "license", "text")):
+                    raise ValueError(f"{path}:{number}: evidence의 출처 정보가 부족합니다")
         key = (row["expression"].strip(), row["situation"].strip(), row["language"], row["task"])
         if key in seen:
             raise ValueError(f"{path}:{number}: 중복 사례")

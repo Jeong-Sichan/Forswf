@@ -17,6 +17,8 @@ KoRMo-10B-sft는 문맥을 고려한 설명을 생성하는 데 사용한다. QL
 
 한국 생활·문화의 폭넓은 사실 자료는 [KNOWLEDGE_PLAN.md](KNOWLEDGE_PLAN.md)에 따라 출처를 확인한 문서를 검색해 답변에 넣는다. 현재 64개의 미검수 표현 사례는 문화 지식 문서의 대체물이 아니다.
 
+수집·검색·출처 표시와 근거 기반 QLoRA의 실제 실행 절차는 [KNOWLEDGE_PIPELINE.md](KNOWLEDGE_PIPELINE.md)에 있다. 구현된 수집 도구가 있다는 것과 문서 수집·검수·성능 측정이 끝났다는 것은 구분한다.
+
 Seraph에서는 `/data`의 압축 학습 데이터 파일을 Slurm으로 할당된 계산 노드의 `/local_datasets`로 복사·해제한 뒤 읽는다. KoRMo 모델 파일과 LoRA 어댑터는 사용자 `/data` 영역에 둔다.
 
 ## 시연할 세 장면
@@ -38,4 +40,4 @@ Seraph에서는 `/data`의 압축 학습 데이터 파일을 Slurm으로 할당�
 
 ## 구현 전 확인
 
-KoRMo 모델 카드의 라이선스, 대화 템플릿, Transformers 지원 버전, 학교 서버의 드라이버·CUDA·인터넷 접근을 확인해야 한다. 현재 클라우드는 Hugging Face와 학교 SSH에 접근하지 못하므로 실제 가중치 로딩 및 GPU 학습은 아직 검증되지 않았다.
+사용자 계산 노드에서 KoRMo 기본 생성은 확인했다. 현재 클라우드는 Hugging Face와 학교 SSH에 접근하지 못하므로, 새 검색기의 문서 수집·검색 품질 및 GPU QLoRA 학습은 Seraph에서 검증해야 한다.

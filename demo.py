@@ -11,11 +11,19 @@ def main() -> None:
     parser.add_argument("--model", default="KORMo-Team/KORMo-10B-sft")
     parser.add_argument("--revision", required=True, help="Pinned Hugging Face model commit SHA")
     parser.add_argument("--adapter", help="Optional locally trained LoRA adapter directory")
+    parser.add_argument("--knowledge", help="Chunk JSONL staged under /local_datasets on this compute node")
+    parser.add_argument("--retriever", choices=("e5", "bm25"), default="e5")
     parser.add_argument("--smoke", action="store_true", help="Generate one answer and exit without a web server")
     parser.add_argument("--smoke-suite", action="store_true", help="Test English, Korean, and an English question in one load")
     parser.add_argument("--share", action="store_true", help="Create a temporary Gradio link")
     args = parser.parse_args()
     require_pinned_revision(args.revision)
+    index = None
+    if args.knowledge:
+        from knowledge import BM25Index, E5Index, load_chunks
+
+        chunks = load_chunks(args.knowledge)
+        index = E5Index(chunks, cache_path=args.knowledge + ".e5.pt") if args.retriever == "e5" else BM25Index(chunks)
 
     import gradio as gr
     import torch
@@ -45,7 +53,16 @@ def main() -> None:
 
     def explain(expression: str, situation: str, relationship: str, language: str, task: str) -> str:
         try:
-            prompt = render(tokenizer, messages(expression, situation, relationship, language, task), True)
+            found = index.search(expression + " " + situation, limit=3) if index else None
+            if index and not found:
+                return "I could not find a relevant source. Please add context or check another source. / 관련 출처를 찾지 못했습니다. 상황을 더 알려주세요."
+            if found is not None:
+                from knowledge import evidence_for_prompt
+
+                evidence = evidence_for_prompt(found)
+            else:
+                evidence = None
+            prompt = render(tokenizer, messages(expression, situation, relationship, language, task, evidence), True)
         except ValueError as exc:
             return str(exc)
         inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=2048)
@@ -57,7 +74,12 @@ def main() -> None:
                 do_sample=False,
                 pad_token_id=tokenizer.eos_token_id,
             )
-        return tokenizer.decode(output[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True)
+        answer = tokenizer.decode(output[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True)
+        if found:
+            from knowledge import source_footer
+
+            answer += source_footer(found)
+        return answer
 
     if args.smoke:
         print(explain("반찬은 셀프입니다", "A sign on the wall of a restaurant", "Customer and restaurant", "en", "explain"))
@@ -75,7 +97,7 @@ def main() -> None:
         return
 
     with gr.Blocks(title="말맥 | 한국어 맥락 해설기") as ui:
-        gr.Markdown("# 말맥 | Malmaek\nUnderstand Korean expressions in context. 한국어 표현을 상황에 맞게 설명합니다. AI answers may be wrong.")
+        gr.Markdown("# 말맥 | Malmaek\nUnderstand Korean expressions in context. 한국어 표현을 상황에 맞게 설명합니다. AI answers may be wrong. Retrieved sources are shown when available.")
         task = gr.Radio(choices=[("Explain a phrase / 표현 해설", "explain"), ("Ask a question / 질문하기", "ask")], value="explain", label="Task / 기능")
         expression = gr.Textbox(label="Korean expression or question / 표현 또는 질문", placeholder="생각해 볼게요")
         situation = gr.Textbox(label="Situation / 상황", placeholder="A reply after inviting a friend to a weekend meetup")
