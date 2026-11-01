@@ -9,20 +9,15 @@
 - 학습과 평가 스크립트는 `/data` 경로를 데이터로 받으면 오류를 내도록 설정했습니다.
 - 로그인 노드에서는 Python 실행, 패키지 설치, 압축 해제, 대량 파일 검색을 하지 마세요.
 
-## 코드 ZIP을 서버로 옮기기
+## 코드를 서버로 옮기기
 
-이 채팅의 `malmaek-seraph-prototype.zip` 링크에서 ZIP을 개인 PC로 저장한 뒤, **개인 PC 터미널에서** 다음처럼 전송합니다. ZIP을 푸는 작업은 로그인 노드에서 하지 말고, 아래의 `srun`으로 계산 노드를 받은 뒤 수행하세요.
-
-```bash
-scp -P 30080 malmaek-seraph-prototype.zip jsc66519075@aurora.khu.ac.kr:/data/jsc66519075/repos/
-```
-
-**계산 노드에서** 코드 ZIP을 빈 작업 디렉터리에 풉니다. 기존 작업 디렉터리가 있으면 덮어쓰지 말고 먼저 내용을 확인하세요.
+학교 서버의 Git이 오래된 VS Code `askpass.sh`를 참조하거나 GitHub 인증이 없다면 HTTPS 복제가 실패할 수 있습니다. 이 경우 **개인 PC에서 로그인한 GitHub**의 `Jeong-Sichan/Forswf` → `codex/malmaek-seraph` 브랜치를 열고 `Code` → `Download ZIP`을 누르세요. PC에서 ZIP을 풀고 생성된 폴더 이름을 `malmaek-prototype`으로 바꾼 뒤, **개인 PC 터미널에서** 다음을 실행합니다.
 
 ```bash
-mkdir -p /data/$USER/repos/malmaek-prototype
-unzip -n /data/$USER/repos/malmaek-seraph-prototype.zip -d /data/$USER/repos/malmaek-prototype
+scp -P 30080 -r malmaek-prototype jsc66519075@aurora.khu.ac.kr:/data/jsc66519075/repos/
 ```
+
+전송 전에 서버의 `/data/$USER/repos/malmaek-prototype`이 이미 있는지 확인하세요. 존재한다면 기존 파일을 덮어쓰지 말고 별도 이름을 사용하세요. 이 단계는 코드 파일 몇 개를 NAS에 놓는 작업이며, 학습 데이터는 아래 절차대로 압축 파일을 계산 노드의 `/local_datasets`로 옮깁니다.
 
 ## 1. 데이터 준비
 
