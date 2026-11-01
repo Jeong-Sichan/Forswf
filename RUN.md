@@ -63,7 +63,7 @@ python -m pip install -r requirements-gpu.txt
 
 가상환경에서 CUDA가 `False`이거나 서버의 PyTorch를 상속하지 못하면 설치를 멈추고 환경 경로를 확인하세요. KoRMo 모델 카드의 라이선스, 접근 조건, 사용 방법도 다운로드 전에 확인해야 합니다. 현재 클라우드에서는 모델 카드와 학교 서버에 직접 접근할 수 없어 모델 로딩은 아직 검증되지 않았습니다.
 
-KoRMo 설정에는 모델 전용 코드(`auto_map`)가 있습니다. 모델 저장소 코드를 실행하기 전 해당 파일을 검토하고, 모델의 40자리 커밋 SHA를 확인해 `KORMO_REVISION`으로 고정하세요. 학습 배치 작업은 이 변수를 상속합니다.
+KoRMo 설정에는 모델 전용 코드(`_configuration_kormo.py`, `_modeling_kormo.py`)가 있습니다. 모델 저장소 코드를 실행하기 전 해당 파일을 검토하세요. 확인한 모델 커밋은 `547fa40eeb8c69d3c5e278daf906d315c4f8e7ea`입니다. 학습 배치 작업은 `KORMO_REVISION`을 상속합니다.
 
 ## 3. 짧은 검증과 학습
 
@@ -72,7 +72,7 @@ KoRMo 설정에는 모델 전용 코드(`auto_map`)가 있습니다. 모델 저�
 ```bash
 cd /data/$USER/repos/swf/Forswf
 export HF_HOME=/data/$USER/models/malmaek/hf-cache
-export KORMO_REVISION=여기에_모델_40자리_커밋_SHA
+export KORMO_REVISION=547fa40eeb8c69d3c5e278daf906d315c4f8e7ea
 bash scripts/stage_dataset.sh /data/$USER/datasets/malmaek.tar.gz /local_datasets/$USER/malmaek-debug-1/data
 python validate_data.py --train /local_datasets/$USER/malmaek-debug-1/data/train.jsonl --eval /local_datasets/$USER/malmaek-debug-1/data/eval.jsonl
 ```
@@ -84,7 +84,7 @@ python validate_data.py --train /local_datasets/$USER/malmaek-debug-1/data/train
 ```bash
 cd /data/$USER/repos/swf/Forswf
 source /data/$USER/envs/malmaek/bin/activate
-export KORMO_REVISION=여기에_모델_40자리_커밋_SHA
+export KORMO_REVISION=547fa40eeb8c69d3c5e278daf906d315c4f8e7ea
 mkdir -p logs
 sbatch -p <허용된_batch_partition> scripts/train.slurm.sh /data/$USER/datasets/malmaek.tar.gz
 squeue -u "$USER"
