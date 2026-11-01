@@ -10,6 +10,7 @@ def main() -> None:
     parser.add_argument("--model", default="KORMo-Team/KORMo-10B-sft")
     parser.add_argument("--revision", required=True, help="Pinned Hugging Face model commit SHA")
     parser.add_argument("--adapter", help="Optional locally trained LoRA adapter directory")
+    parser.add_argument("--smoke", action="store_true", help="Generate one answer and exit without a web server")
     parser.add_argument("--share", action="store_true", help="Create a temporary Gradio link")
     args = parser.parse_args()
     require_pinned_revision(args.revision)
@@ -54,6 +55,10 @@ def main() -> None:
                 pad_token_id=tokenizer.eos_token_id,
             )
         return tokenizer.decode(output[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True)
+
+    if args.smoke:
+        print(explain("반찬은 셀프입니다", "식당 벽의 안내문", "손님과 식당"))
+        return
 
     with gr.Blocks(title="말맥 | 한국어 맥락 해설기") as ui:
         gr.Markdown("# 말맥\n한국어 표현의 뜻과 상황에 따른 해석을 살펴보세요. AI 답변은 틀릴 수 있습니다.")

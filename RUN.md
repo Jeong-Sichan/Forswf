@@ -67,12 +67,18 @@ KoRMo 설정에는 모델 전용 코드(`_configuration_kormo.py`, `_modeling_ko
 
 ## 3. 짧은 검증과 학습
 
-`srun` 계산 노드에서 모델을 처음 불러올 때 모델 캐시는 사용자 `/data`에, 학습 데이터는 `/local_datasets`에 둡니다. 아래 예시의 `malmaek-debug-1`은 새 실행마다 다른 이름으로 바꾸세요.
+`srun` 계산 노드에서 먼저 모델만 4비트로 불러와 답변 하나를 생성합니다. 모델 캐시는 사용자 `/data`에 둡니다. 첫 실행에는 KoRMo 가중치가 다운로드되어 시간이 걸릴 수 있습니다.
 
 ```bash
 cd /data/$USER/repos/swf/Forswf
 export HF_HOME=/data/$USER/models/malmaek/hf-cache
 export KORMO_REVISION=547fa40eeb8c69d3c5e278daf906d315c4f8e7ea
+python demo.py --revision "$KORMO_REVISION" --smoke
+```
+
+학습 데이터가 준비되면 그때 `/local_datasets`로 복사·해제합니다. 아래 예시의 `malmaek-debug-1`은 새 실행마다 다른 이름으로 바꾸세요.
+
+```bash
 bash scripts/stage_dataset.sh /data/$USER/datasets/malmaek.tar.gz /local_datasets/$USER/malmaek-debug-1/data
 python validate_data.py --train /local_datasets/$USER/malmaek-debug-1/data/train.jsonl --eval /local_datasets/$USER/malmaek-debug-1/data/eval.jsonl
 ```
