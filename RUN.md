@@ -35,7 +35,7 @@ scp -P 30080 -r malmaek-prototype jsc66519075@aurora.khu.ac.kr:/data/jsc66519075
 
 ## 1. 데이터 준비
 
-파이썬으로 사례를 작성하려면 `prepare_dataset.py`의 `TRAIN`과 `EVAL` 목록을 편집하세요. 개인 PC 또는 할당받은 계산 노드에서 아래 명령을 실행하면 학습용 JSONL 두 파일과 전송용 압축 파일이 생성됩니다. JSONL은 학습 프로그램의 데이터 저장 형식일 뿐, 사람이 직접 작성해야 하는 형식이 아닙니다. 현재 예시 2개씩은 형식 확인용입니다. 직접 검토한 학습 사례를 최소 50개 이상, 표현이 겹치지 않는 평가 사례를 별도로 준비하세요.
+파이썬으로 사례를 작성하려면 `prepare_dataset.py`의 `TRAIN`과 `EVAL` 목록을 편집하세요. 개인 PC 또는 할당받은 계산 노드에서 아래 명령을 실행하면 학습용 JSONL 두 파일과 전송용 압축 파일이 생성됩니다. JSONL은 학습 프로그램의 데이터 저장 형식일 뿐, 사람이 직접 작성해야 하는 형식이 아닙니다. 현재 예시 2개씩은 형식 확인용입니다. `train_qlora.py`의 50건 하한은 품질 목표가 아닙니다. [데이터 계획](DATA_PLAN.md)에 따라 학습 200~500건, 겹치지 않는 평가 50건 이상을 목표로 하세요.
 
 ```bash
 python prepare_dataset.py --output-dir ./prepared-data
