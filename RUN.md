@@ -11,7 +11,18 @@
 
 ## 코드를 서버로 옮기기
 
-학교 서버의 Git이 오래된 VS Code `askpass.sh`를 참조하거나 GitHub 인증이 없다면 HTTPS 복제가 실패할 수 있습니다. 이 경우 **개인 PC에서 로그인한 GitHub**의 `Jeong-Sichan/Forswf` → `codex/malmaek-seraph` 브랜치를 열고 `Code` → `Download ZIP`을 누르세요. PC에서 ZIP을 풀고 생성된 폴더 이름을 `malmaek-prototype`으로 바꾼 뒤, **개인 PC 터미널에서** 다음을 실행합니다.
+학교 서버에서 직접 복제할 수 있습니다. 오래된 VS Code `askpass.sh`가 Git 인증을 가로막는 경우, GitHub CLI가 설치돼 있다면 서버 셸에서 다음처럼 한 번 인증하세요. `gh auth login --web`이 표시하는 기기 인증 페이지를 **개인 PC 브라우저**에서 열어 승인합니다. 비밀번호나 토큰을 채팅에 보내지 마세요.
+
+```bash
+command -v gh
+unset GIT_ASKPASS SSH_ASKPASS
+gh auth login --hostname github.com --git-protocol https --web
+gh auth setup-git
+cd /data/$USER/repos
+git clone --branch codex/malmaek-seraph --single-branch https://github.com/Jeong-Sichan/Forswf.git malmaek-prototype
+```
+
+`command -v gh`가 실패하면 GitHub CLI 설치 또는 SSH 키 인증이 필요합니다. 별도 설치 없이 진행하려면 **개인 PC에서 로그인한 GitHub**의 `Jeong-Sichan/Forswf` → `codex/malmaek-seraph` 브랜치를 열고 `Code` → `Download ZIP`을 누르세요. PC에서 ZIP을 풀고 생성된 폴더 이름을 `malmaek-prototype`으로 바꾼 뒤, **개인 PC 터미널에서** 다음을 실행합니다.
 
 ```bash
 scp -P 30080 -r malmaek-prototype jsc66519075@aurora.khu.ac.kr:/data/jsc66519075/repos/
