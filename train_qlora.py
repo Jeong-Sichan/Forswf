@@ -68,7 +68,7 @@ def main() -> None:
             for row in rows:
                 prompt = render(
                     tokenizer,
-                    messages(row["expression"], row["situation"], row["relationship"], row["language"]),
+                    messages(row["expression"], row["situation"], row["relationship"], row["language"], row["task"]),
                     True,
                 )
                 completion = row["answer"].strip() + tokenizer.eos_token

@@ -78,6 +78,12 @@ export KORMO_REVISION=547fa40eeb8c69d3c5e278daf906d315c4f8e7ea
 python demo.py --revision "$KORMO_REVISION" --smoke
 ```
 
+영어 표현 해설, 쉬운 한국어 해설, 영어 질문을 **한 번의 모델 로딩**으로 확인하려면 `--smoke-suite`를 사용합니다. 질문하기 모드는 아직 별도 학습·평가 사례가 없으므로 이 결과는 기본 모델 기능 확인입니다.
+
+```bash
+python demo.py --revision "$KORMO_REVISION" --smoke-suite
+```
+
 학습 데이터가 준비되면 그때 `/local_datasets`로 복사·해제합니다. 아래 예시의 `malmaek-debug-1`은 새 실행마다 다른 이름으로 바꾸세요.
 
 ```bash
