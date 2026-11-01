@@ -1,6 +1,7 @@
 """Shared prompt and dataset checks for the KoRMo prototype."""
 
 import json
+import re
 from pathlib import Path
 
 SYSTEM = """당신은 한국 생활에서 마주치는 짧은 한국어 표현을 설명하는 도우미입니다.
@@ -19,6 +20,11 @@ def require_local_dataset(path: str) -> None:
     resolved = Path(path).resolve()
     if not resolved.is_relative_to(Path("/local_datasets")):
         raise ValueError(f"학습·평가 데이터는 /local_datasets 아래에 있어야 합니다: {path}")
+
+
+def require_pinned_revision(value: str) -> None:
+    if re.fullmatch(r"[0-9a-f]{40}", value) is None:
+        raise ValueError("KoRMo revision에는 모델의 40자리 커밋 SHA가 필요합니다")
 
 
 def messages(expression: str, situation: str, relationship: str) -> list[dict[str, str]]:

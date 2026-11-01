@@ -2,15 +2,17 @@
 
 import argparse
 
-from prompting import messages, render
+from prompting import messages, render, require_pinned_revision
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default="KORMo-Team/KORMo-10B-sft")
+    parser.add_argument("--revision", required=True, help="Pinned Hugging Face model commit SHA")
     parser.add_argument("--adapter", help="Optional locally trained LoRA adapter directory")
     parser.add_argument("--share", action="store_true", help="Create a temporary Gradio link")
     args = parser.parse_args()
+    require_pinned_revision(args.revision)
 
     import gradio as gr
     import torch
@@ -19,9 +21,11 @@ def main() -> None:
     if not torch.cuda.is_available():
         raise RuntimeError("GPU가 필요합니다. 학교 서버에서 실행해 주세요.")
     dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
-    tokenizer = AutoTokenizer.from_pretrained(args.model)
+    tokenizer = AutoTokenizer.from_pretrained(args.model, revision=args.revision, trust_remote_code=True)
     model = AutoModelForCausalLM.from_pretrained(
         args.model,
+        revision=args.revision,
+        trust_remote_code=True,
         device_map="auto",
         quantization_config=BitsAndBytesConfig(
             load_in_4bit=True,

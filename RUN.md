@@ -63,24 +63,28 @@ python -m pip install -r requirements-gpu.txt
 
 가상환경에서 CUDA가 `False`이거나 서버의 PyTorch를 상속하지 못하면 설치를 멈추고 환경 경로를 확인하세요. KoRMo 모델 카드의 라이선스, 접근 조건, 사용 방법도 다운로드 전에 확인해야 합니다. 현재 클라우드에서는 모델 카드와 학교 서버에 직접 접근할 수 없어 모델 로딩은 아직 검증되지 않았습니다.
 
+KoRMo 설정에는 모델 전용 코드(`auto_map`)가 있습니다. 모델 저장소 코드를 실행하기 전 해당 파일을 검토하고, 모델의 40자리 커밋 SHA를 확인해 `KORMO_REVISION`으로 고정하세요. 학습 배치 작업은 이 변수를 상속합니다.
+
 ## 3. 짧은 검증과 학습
 
-`srun` 계산 노드에서 모델을 처음 불러올 때는 캐시를 로컬에 둡니다. 학습 데이터도 먼저 로컬로 옮깁니다. 아래 예시의 `malmaek-debug-1`은 새 실행마다 다른 이름으로 바꾸세요.
+`srun` 계산 노드에서 모델을 처음 불러올 때 모델 캐시는 사용자 `/data`에, 학습 데이터는 `/local_datasets`에 둡니다. 아래 예시의 `malmaek-debug-1`은 새 실행마다 다른 이름으로 바꾸세요.
 
 ```bash
 cd /data/$USER/repos/swf/Forswf
 export HF_HOME=/data/$USER/models/malmaek/hf-cache
+export KORMO_REVISION=여기에_모델_40자리_커밋_SHA
 bash scripts/stage_dataset.sh /data/$USER/datasets/malmaek.tar.gz /local_datasets/$USER/malmaek-debug-1/data
 python validate_data.py --train /local_datasets/$USER/malmaek-debug-1/data/train.jsonl --eval /local_datasets/$USER/malmaek-debug-1/data/eval.jsonl
 ```
 
-시연 코드는 체크아웃 디렉터리에서 `python demo.py`로 실행합니다. 기본 바인딩은 계산 노드의 `127.0.0.1`이며, 자신의 SSH 터널이나 승인된 내부 경로로 접속해야 합니다. `--share`는 공개 링크가 필요할 때만 사용하세요.
+시연 코드는 체크아웃 디렉터리에서 `python demo.py --revision "$KORMO_REVISION"`로 실행합니다. 기본 바인딩은 계산 노드의 `127.0.0.1`이며, 자신의 SSH 터널이나 승인된 내부 경로로 접속해야 합니다. `--share`는 공개 링크가 필요할 때만 사용하세요.
 
 긴 학습은 로그인 노드에서 `sbatch`로 제출합니다. 제출 전에 학습에 사용할 가상환경을 활성화하고, 작업 디렉터리에서 `logs`를 만드세요. 스크립트는 학습 데이터 압축 파일만 `/local_datasets`에 복사·해제합니다. 모델 캐시와 완성된 LoRA 어댑터는 사용자 `/data` 영역에 둡니다.
 
 ```bash
 cd /data/$USER/repos/swf/Forswf
 source /data/$USER/envs/malmaek/bin/activate
+export KORMO_REVISION=여기에_모델_40자리_커밋_SHA
 mkdir -p logs
 sbatch -p <허용된_batch_partition> scripts/train.slurm.sh /data/$USER/datasets/malmaek.tar.gz
 squeue -u "$USER"

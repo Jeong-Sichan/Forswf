@@ -4,7 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
-from prompting import messages, read_examples, render, require_local_dataset
+from prompting import messages, read_examples, render, require_local_dataset, require_pinned_revision
 
 
 def main() -> None:
@@ -13,8 +13,10 @@ def main() -> None:
     parser.add_argument("--adapter", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--model", default="KORMo-Team/KORMo-10B-sft")
+    parser.add_argument("--revision", required=True, help="Pinned Hugging Face model commit SHA")
     args = parser.parse_args()
 
+    require_pinned_revision(args.revision)
     require_local_dataset(args.eval)
 
     import torch
@@ -25,9 +27,11 @@ def main() -> None:
     if not torch.cuda.is_available():
         raise RuntimeError("GPU가 필요합니다")
     dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
-    tokenizer = AutoTokenizer.from_pretrained(args.model)
+    tokenizer = AutoTokenizer.from_pretrained(args.model, revision=args.revision, trust_remote_code=True)
     base = AutoModelForCausalLM.from_pretrained(
         args.model,
+        revision=args.revision,
+        trust_remote_code=True,
         device_map="auto",
         quantization_config=BitsAndBytesConfig(
             load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=dtype

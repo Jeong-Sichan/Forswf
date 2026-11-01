@@ -3,7 +3,7 @@
 import argparse
 from pathlib import Path
 
-from prompting import messages, read_examples, render, require_local_dataset
+from prompting import messages, read_examples, render, require_local_dataset, require_pinned_revision
 
 
 def main() -> None:
@@ -11,10 +11,12 @@ def main() -> None:
     parser.add_argument("--train", required=True, help="Reviewed JSONL training data")
     parser.add_argument("--output", required=True)
     parser.add_argument("--model", default="KORMo-Team/KORMo-10B-sft")
+    parser.add_argument("--revision", required=True, help="Pinned Hugging Face model commit SHA")
     parser.add_argument("--epochs", type=float, default=2)
     parser.add_argument("--max-length", type=int, default=1536)
     args = parser.parse_args()
 
+    require_pinned_revision(args.revision)
     require_local_dataset(args.train)
     if not Path(args.output).resolve().is_relative_to("/data"):
         raise ValueError("LoRA 모델 출력은 /data 사용자 영역에 저장해 주세요")
@@ -30,11 +32,13 @@ def main() -> None:
         raise ValueError("50개 미만의 사례로 학습 결과를 주장하지 마세요. 검토한 데이터를 더 모아 주세요.")
 
     dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
-    tokenizer = AutoTokenizer.from_pretrained(args.model)
+    tokenizer = AutoTokenizer.from_pretrained(args.model, revision=args.revision, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     model = AutoModelForCausalLM.from_pretrained(
         args.model,
+        revision=args.revision,
+        trust_remote_code=True,
         device_map="auto",
         quantization_config=BitsAndBytesConfig(
             load_in_4bit=True,
