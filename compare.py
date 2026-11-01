@@ -41,7 +41,7 @@ def main() -> None:
     model.eval()
 
     def generate(row):
-        prompt = render(tokenizer, messages(row["expression"], row["situation"], row["relationship"]), True)
+        prompt = render(tokenizer, messages(row["expression"], row["situation"], row["relationship"], row["language"]), True)
         encoded = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=2048)
         encoded = {key: value.to(model.device) for key, value in encoded.items()}
         with torch.inference_mode():
@@ -63,6 +63,7 @@ def main() -> None:
                 "expression": row["expression"],
                 "situation": row["situation"],
                 "relationship": row["relationship"],
+                "language": row["language"],
                 "reference": row["answer"],
                 "baseline": baseline,
                 "adapted": adapted,

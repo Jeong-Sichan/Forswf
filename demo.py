@@ -40,9 +40,9 @@ def main() -> None:
         model = PeftModel.from_pretrained(model, args.adapter)
     model.eval()
 
-    def explain(expression: str, situation: str, relationship: str) -> str:
+    def explain(expression: str, situation: str, relationship: str, language: str) -> str:
         try:
-            prompt = render(tokenizer, messages(expression, situation, relationship), True)
+            prompt = render(tokenizer, messages(expression, situation, relationship, language), True)
         except ValueError as exc:
             return str(exc)
         inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=2048)
@@ -57,22 +57,23 @@ def main() -> None:
         return tokenizer.decode(output[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True)
 
     if args.smoke:
-        print(explain("반찬은 셀프입니다", "식당 벽의 안내문", "손님과 식당"))
+        print(explain("반찬은 셀프입니다", "A sign on the wall of a restaurant", "Customer and restaurant", "en"))
         return
 
     with gr.Blocks(title="말맥 | 한국어 맥락 해설기") as ui:
-        gr.Markdown("# 말맥\n한국어 표현의 뜻과 상황에 따른 해석을 살펴보세요. AI 답변은 틀릴 수 있습니다.")
-        expression = gr.Textbox(label="한국어 표현", placeholder="생각해 볼게요")
-        situation = gr.Textbox(label="상황", placeholder="동료에게 주말 모임을 제안했어요")
-        relationship = gr.Textbox(label="상대와의 관계", placeholder="직장 동료")
-        button = gr.Button("맥락 살펴보기", variant="primary")
+        gr.Markdown("# 말맥 | Malmaek\nUnderstand Korean expressions in context. 한국어 표현을 상황에 맞게 설명합니다. AI answers may be wrong.")
+        expression = gr.Textbox(label="Korean expression / 한국어 표현", placeholder="생각해 볼게요")
+        situation = gr.Textbox(label="Situation / 상황", placeholder="A reply after inviting a friend to a weekend meetup")
+        relationship = gr.Textbox(label="Relationship / 상대와의 관계", placeholder="Friends")
+        language = gr.Radio(choices=[("English", "en"), ("쉬운 한국어", "ko")], value="en", label="Explanation language / 답변 언어")
+        button = gr.Button("Explain / 맥락 살펴보기", variant="primary")
         answer = gr.Markdown()
-        button.click(explain, [expression, situation, relationship], answer)
+        button.click(explain, [expression, situation, relationship, language], answer)
         gr.Examples(
             [
-                ["반찬은 셀프입니다", "식당 벽의 안내문", "손님과 식당"],
-                ["생각해 볼게요", "동료에게 주말 모임을 제안한 뒤 들은 답", "직장 동료"],
-                ["시간 되실 때 확인 부탁드립니다", "교수에게 보낼 메일 문장", "학생과 교수"],
+                ["반찬은 셀프입니다", "A sign on the wall of a restaurant", "Customer and restaurant"],
+                ["생각해 볼게요", "A reply after inviting a friend to a weekend meetup", "Friends"],
+                ["시간 되실 때 확인 부탁드립니다", "An email asking a professor to review a draft", "Student and professor"],
             ],
             [expression, situation, relationship],
         )

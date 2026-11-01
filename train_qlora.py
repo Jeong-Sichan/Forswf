@@ -28,8 +28,8 @@ def main() -> None:
     if not torch.cuda.is_available():
         raise RuntimeError("QLoRA 학습에는 CUDA GPU가 필요합니다")
     rows = read_examples(args.train)
-    if len(rows) < 50:
-        raise ValueError("50개 미만의 사례로 학습 결과를 주장하지 마세요. 검토한 데이터를 더 모아 주세요.")
+    if len({row["expression"].strip() for row in rows}) < 50:
+        raise ValueError("서로 다른 표현 50개 미만으로 학습 결과를 주장하지 마세요. 검토한 데이터를 더 모아 주세요.")
 
     dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
     tokenizer = AutoTokenizer.from_pretrained(args.model, revision=args.revision, trust_remote_code=True)
@@ -66,7 +66,7 @@ def main() -> None:
             for row in rows:
                 prompt = render(
                     tokenizer,
-                    messages(row["expression"], row["situation"], row["relationship"]),
+                    messages(row["expression"], row["situation"], row["relationship"], row["language"]),
                     True,
                 )
                 completion = row["answer"].strip() + tokenizer.eos_token
