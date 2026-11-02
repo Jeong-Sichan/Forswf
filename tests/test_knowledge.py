@@ -5,7 +5,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-from knowledge import BM25Index, chunk_document, evidence_for_prompt, load_chunks, source_footer
+from knowledge import BM25Index, chunk_document, evidence_for_prompt, guide_source_matches, load_chunks, source_footer
 from prompting import messages
 from scripts import collect_wikimedia
 
@@ -38,6 +38,15 @@ class KnowledgeTests(unittest.TestCase):
     def test_search_cannot_read_nas_data_directly(self):
         with self.assertRaises(ValueError):
             load_chunks("/data/example/knowledge/chunks.jsonl")
+
+    def test_public_transit_guide_matches_question_topic(self):
+        passage = {
+            "source_id": "easylaw:661:1.2.1",
+            "title": "김대리의 안전한 출퇴근길 · 부정승차 하지 않기 · 법제처",
+            "text": "버스와 지하철에서 교통카드나 승차권으로 운임을 내야 합니다.",
+        }
+        self.assertTrue(guide_source_matches("버스 교통카드 없이 타도 되나요?", passage))
+        self.assertFalse(guide_source_matches("전세 보증금은 어떻게 하나요?", passage))
 
     def test_collector_keeps_license_revision_and_source_url(self):
         def fake_api(_language, params):

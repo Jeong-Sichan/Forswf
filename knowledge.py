@@ -159,6 +159,9 @@ def guide_source_matches(question: str, row: dict) -> bool:
     """
     if not row.get("source_id", "").startswith("easylaw:") or not re.search(r"[가-힣]", question):
         return True
+    if row["source_id"].startswith("easylaw:661:"):
+        transit_terms = ("버스", "지하철", "대중교통", "교통카드", "승차권", "부정승차")
+        return any(term in question and term in row["text"] for term in transit_terms)
     title_parts = row["title"].split("·")
     topic = title_parts[1].strip() if len(title_parts) >= 3 else row["title"]
     return len(set(terms(question)) & set(terms(topic))) >= 2

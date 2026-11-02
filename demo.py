@@ -23,6 +23,8 @@ def main() -> None:
     parser.add_argument("--smoke", action="store_true", help="Generate one answer and exit without a web server")
     parser.add_argument("--smoke-suite", action="store_true", help="Test English, Korean, and an English question in one load")
     parser.add_argument("--smoke-student", action="store_true", help="Test a sourced student-life question")
+    parser.add_argument("--guide-question", help="Answer one student-life question from --knowledge and exit")
+    parser.add_argument("--guide-language", choices=("en", "ko"), default="en")
     parser.add_argument("--compare-adapter", action="store_true", help="Compare base and LoRA answers using one model load")
     parser.add_argument("--share", action="store_true", help="Create a temporary Gradio link")
     args = parser.parse_args()
@@ -31,6 +33,8 @@ def main() -> None:
         parser.error("--compare-adapter requires --adapter")
     if args.english_mode == "translate-lora" and not args.adapter:
         parser.error("--english-mode translate-lora requires --adapter")
+    if args.guide_question and not args.knowledge:
+        parser.error("--guide-question requires --knowledge")
     index = None
     if args.knowledge:
         from knowledge import BM25Index, E5Index, guide_source_matches, load_chunks
@@ -70,9 +74,9 @@ def main() -> None:
             active_index = index if use_knowledge else None
             if task == "guide" and active_index is None:
                 return "Student-life questions need a knowledge index. / 유학생 생활 질문에는 지식 자료가 필요합니다."
-            found = active_index.search(expression + " " + situation, limit=1 if task == "guide" else 2) if active_index else None
-            if task == "guide" and found and not guide_source_matches(expression, found[0]):
-                found = []
+            found = active_index.search(expression + " " + situation, limit=5 if task == "guide" else 2) if active_index else None
+            if task == "guide" and found:
+                found = [row for row in found if guide_source_matches(expression, row)][:1]
             if active_index and not found:
                 return "I could not find a relevant source. Please add context or check another source. / 관련 출처를 찾지 못했습니다. 상황을 더 알려주세요."
             if found is not None:
@@ -173,6 +177,10 @@ def main() -> None:
 
     if args.smoke_student:
         print(explain("외국인등록은 어디서 신청하나요?", "한국에 온 유학생", "", "ko", "guide"))
+        return
+
+    if args.guide_question:
+        print(explain(args.guide_question, "International student living in Korea", "", args.guide_language, "guide"))
         return
 
     if args.compare_adapter:

@@ -45,7 +45,42 @@ python demo.py --revision "$KORMO_REVISION" \
   --knowledge "$local_law/chunks.jsonl" --retriever bm25 --smoke-student
 ```
 
-`--smoke-student`는 공식 발췌를 넣은 **유학생 생활 질문**을 한 번 생성한다. 답변의 모든 사실이 검색 발췌에 실제로 있는지 사람이 확인한다. 본문에 `[1]` 같은 번호를 넣지 않지만, 법제처의 이용 조건에 따라 출처 링크는 답변 아래에 표시한다. 이 법령 자료는 말투·식당 예절의 근거가 아니다. 한국어 생활 질문에서 검색 문서 제목의 주제어가 맞지 않으면 출처가 없다고 안내한다. 영어 질문에는 기본 E5 검색기를 사용해 교차 언어 검색을 별도로 시험하되, 무관한 문서가 반환되는지 직접 검토한다. 최신 절차는 화면의 기준일과 하이코리아 등 현재 담당기관 안내를 다시 확인한다.
+`--smoke-student`는 공식 발췌를 넣은 **유학생 생활 질문**을 한 번 생성한다. 답변의 모든 사실이 검색 발췌에 실제로 있는지 사람이 확인한다. 본문에 `[1]` 같은 번호를 넣지 않지만, 법제처의 이용 조건에 따라 출처 링크는 답변 아래에 표시한다. 이 법령 자료는 말투·식당 예절의 근거가 아니다. 한국어 생활 질문에서 검색 자료의 주제가 맞지 않으면 출처가 없다고 안내한다. 영어 질문에는 기본 E5 검색기를 사용해 교차 언어 검색을 별도로 시험하되, 무관한 문서가 반환되는지 직접 검토한다. 최신 절차는 화면의 기준일과 하이코리아 등 현재 담당기관 안내를 다시 확인한다.
+
+## 주거·대중교통 안내를 RAG에 추가
+
+같은 법제처 [저작권정책](https://www.easylaw.go.kr/CSP/AboutCopyright.laf?topMenu=introUl3)을 확인하고 [주택임대차](https://www.easylaw.go.kr/CSP/CsmMain.laf?csmSeq=629), [안전한 출퇴근길](https://www.easylaw.go.kr/CSP/CsmMain.laf?csmSeq=661)의 대중교통 부분을 추가했다. 2026-11-02 로컬 확인에서 새 안내 **28쪽**을 색인 대상으로 선별하고 `출처:`가 있는 **10쪽**은 제3자 권리 검토용으로 분리했다. 기존 유학생 안내 8쪽과 합치면 36개 문서, 기본 분할 기준 202개 청크였다. 서버 재수집 시 사이트 내용과 건수는 달라질 수 있다. 이 자료는 주거 계약·전입신고·버스/지하철 질문을 위한 법률·이용 안내이며, 식당 예절이나 한국어 표현의 숨은 의도를 뒷받침하지 않는다.
+
+코드는 먼저 공유 `/data` 체크아웃에 갱신한다. 아래 수집·색인·검색은 **계산 노드**에서 실행한다.
+
+```bash
+cd /data/$USER/repos/swf/Forswf
+source /data/$USER/envs/malmaek/bin/activate
+python -m scripts.collect_easylaw_students --guides 629 661 \
+  --output /data/$USER/datasets/malmaek-easylaw-life
+python -m scripts.merge_knowledge \
+  --inputs /data/$USER/datasets/malmaek-easylaw-students/documents.jsonl \
+           /data/$USER/datasets/malmaek-easylaw-life/documents.jsonl \
+  --output /data/$USER/datasets/malmaek-easylaw-expanded
+
+local_law=/local_datasets/$USER/malmaek-easylaw-expanded-${SLURM_JOB_ID:-manual}
+bash scripts/stage_knowledge.sh \
+  /data/$USER/datasets/malmaek-easylaw-expanded/knowledge.tar.gz "$local_law"
+python -m scripts.query_knowledge --knowledge "$local_law/chunks.jsonl" \
+  --query '이사 후 전입신고는 어디서 하나요?' --retriever bm25
+python -m scripts.query_knowledge --knowledge "$local_law/chunks.jsonl" \
+  --query '버스 교통카드 없이 타도 되나요?' --retriever bm25
+```
+
+영어 질문과 한국어 문서의 교차 언어 검색은 기본 E5 검색기로 별도 확인한다. 출처 제목과 발췌를 먼저 보고 답변의 사실도 원문과 대조한다. 검색 결과가 주제와 맞지 않으면 앱이 답을 보류할 수 있다.
+
+```bash
+export HF_HOME=/data/$USER/models/malmaek/hf-cache
+export KORMO_REVISION=547fa40eeb8c69d3c5e278daf906d315c4f8e7ea
+python demo.py --revision "$KORMO_REVISION" \
+  --knowledge "$local_law/chunks.jsonl" \
+  --guide-question 'What should I check before signing a housing lease in Korea?'
+```
 
 AI Hub 대화 어댑터 학습을 마치면 `--compare-adapter`로 기본 KoRMo와 같은 모델에 어댑터를 붙인 KoRMo를 한 번의 모델 로딩으로 비교한다. 표현·인사 3건은 자료 없이 비교하고, `--knowledge`가 있으면 외국인등록 질문도 동일한 검색 발췌로 비교한다. 이 비교는 수동 진단이며 대화 이어 말하기 평가 손실만으로 문화·생활 답변의 개선을 주장하지 않는다.
 

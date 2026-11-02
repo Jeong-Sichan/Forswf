@@ -1,4 +1,4 @@
-"""Collect the official Easy Law foreign-student guide for attributed RAG.
+"""Collect selected official Easy Law guides for attributed RAG.
 
 Run on a Seraph compute node. Pages citing another source are set aside for
 reuse review because the site's policy excludes third-party copyrighted works.
@@ -23,6 +23,18 @@ PATH = "/CSP/CnpClsMain.laf"
 COPYRIGHT = "https://www.easylaw.go.kr/CSP/AboutCopyright.laf?topMenu=introUl3"
 LICENSE = f"법제처 찾기쉬운 생활법령정보 저작권정책 ({COPYRIGHT})"
 PARAMETERS = ("ccfNo", "cciNo", "cnpClsNo")
+GUIDES = {
+    "2853": "외국인유학생",
+    "629": "주택임대차",
+    "661": "김대리의 안전한 출퇴근길",
+}
+
+
+def selected_pages(guide_id: str, pages: list[tuple[str, str, str]]) -> list[tuple[str, str, str]]:
+    """Keep the public-transit part of the commute guide, not its car/work sections."""
+    if guide_id == "661":
+        return [numbers for numbers in pages if numbers[0] == "1" and numbers[1] in {"1", "2", "3"}]
+    return pages
 
 
 class VisibleText(HTMLParser):
@@ -58,24 +70,24 @@ def extract_text(fragment: str) -> str:
     return parser.text()
 
 
-def guide_url(numbers: tuple[str, str, str]) -> str:
-    params = {"csmSeq": "2853", **dict(zip(PARAMETERS, numbers))}
+def guide_url(numbers: tuple[str, str, str], guide_id: str = "2853") -> str:
+    params = {"csmSeq": guide_id, **dict(zip(PARAMETERS, numbers))}
     return BASE + PATH + "?" + urlencode(params)
 
 
-def discover_pages(html: str) -> list[tuple[str, str, str]]:
+def discover_pages(html: str, guide_id: str = "2853") -> list[tuple[str, str, str]]:
     found = set()
     for href in re.findall(r"href\s*=\s*['\"]([^'\"]+)['\"]", html, flags=re.I):
         parsed = urlparse(unescape(href))
         query = parse_qs(parsed.query)
-        if parsed.path != PATH or query.get("csmSeq") != ["2853"]:
+        if parsed.path != PATH or query.get("csmSeq") != [guide_id]:
             continue
         if all(len(query.get(key, [])) == 1 and query[key][0].isdigit() for key in PARAMETERS):
             found.add(tuple(query[key][0] for key in PARAMETERS))
     return sorted(found, key=lambda numbers: tuple(map(int, numbers)))
 
 
-def parse_page(html: str, numbers: tuple[str, str, str]) -> dict:
+def parse_page(html: str, numbers: tuple[str, str, str], guide_id: str = "2853") -> dict:
     title_match = re.search(r"<div\s+class=['\"]cnpClsTitle['\"]>(.*?)</div>", html, re.I | re.S)
     body_match = re.search(r"<div\s+id=['\"]ovDiv['\"][^>]*>", html, re.I)
     if not title_match or not body_match:
@@ -92,9 +104,9 @@ def parse_page(html: str, numbers: tuple[str, str, str]) -> dict:
         raise ValueError(f"Article is too short: {numbers}")
     title = extract_text(title_match.group(1))
     return {
-        "source_id": "easylaw:2853:" + ".".join(numbers),
-        "title": f"외국인유학생 · {title} · 법제처",
-        "url": guide_url(numbers),
+        "source_id": f"easylaw:{guide_id}:" + ".".join(numbers),
+        "title": f"{GUIDES[guide_id]} · {title} · 법제처",
+        "url": guide_url(numbers, guide_id),
         "license": LICENSE,
         "language": "ko",
         "publisher": "법제처",
@@ -120,35 +132,37 @@ def fetch(url: str) -> str:
     raise AssertionError("unreachable")
 
 
-def collect(output: Path, max_pages: int | None = None) -> tuple[int, int]:
+def collect(output: Path, max_pages: int | None = None, guides: tuple[str, ...] = ("2853",)) -> tuple[int, int]:
     first = ("1", "1", "1")
-    first_html = fetch(guide_url(first))
-    pages = discover_pages(first_html)
-    if first not in pages or len(pages) < 10:
-        raise ValueError(f"Guide navigation changed: found {len(pages)} pages")
-    if max_pages is not None:
-        if max_pages < 1:
-            raise ValueError("--max-pages must be positive")
-        pages = pages[:max_pages]
+    if not guides or len(set(guides)) != len(guides) or any(guide_id not in GUIDES for guide_id in guides):
+        raise ValueError("Select distinct, supported Easy Law guide IDs")
+    if max_pages is not None and max_pages < 1:
+        raise ValueError("--max-pages must be positive")
     output.mkdir(parents=True, exist_ok=True)
     destination = output / "documents.jsonl"
     review_destination = output / "attribution_review.jsonl"
     kept = 0
     flagged = 0
     with destination.open("w", encoding="utf-8") as target, review_destination.open("w", encoding="utf-8") as review:
-        for index, numbers in enumerate(pages):
-            if index:
-                time.sleep(0.5)
-            html = first_html if numbers == first else fetch(guide_url(numbers))
-            record = parse_page(html, numbers)
-            if re.search(r"출처\s*[:：]", record["text"]):
-                review.write(json.dumps(record, ensure_ascii=False) + "\n")
-                flagged += 1
-                print(f"review attribution: {record['source_id']} {record['title']}")
-            else:
-                target.write(json.dumps(record, ensure_ascii=False) + "\n")
-                kept += 1
-                print(f"indexed: {record['source_id']} {record['title']} ({len(record['text'])} chars)")
+        for guide_id in guides:
+            first_html = fetch(guide_url(first, guide_id))
+            pages = discover_pages(first_html, guide_id)
+            if first not in pages or len(pages) < 10:
+                raise ValueError(f"Guide {guide_id} navigation changed: found {len(pages)} pages")
+            pages = selected_pages(guide_id, pages)
+            for index, numbers in enumerate(pages[:max_pages]):
+                if index:
+                    time.sleep(0.5)
+                html = first_html if numbers == first else fetch(guide_url(numbers, guide_id))
+                record = parse_page(html, numbers, guide_id)
+                if re.search(r"출처\s*[:：]", record["text"]):
+                    review.write(json.dumps(record, ensure_ascii=False) + "\n")
+                    flagged += 1
+                    print(f"review attribution: {record['source_id']} {record['title']}")
+                else:
+                    target.write(json.dumps(record, ensure_ascii=False) + "\n")
+                    kept += 1
+                    print(f"indexed: {record['source_id']} {record['title']} ({len(record['text'])} chars)")
     if not kept:
         raise ValueError("No pages passed the third-party attribution screen")
     with tarfile.open(output / "knowledge.tar.gz", "w:gz") as archive:
@@ -160,7 +174,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--max-pages", type=int, help="Fetch only the first N pages for a trial")
+    parser.add_argument("--guides", nargs="+", choices=sorted(GUIDES), default=["2853"],
+                        help="Easy Law guide IDs: 2853 students, 629 housing leases, 661 transport")
     args = parser.parse_args()
-    kept, flagged = collect(args.output, args.max_pages)
+    kept, flagged = collect(args.output, args.max_pages, tuple(args.guides))
     print(f"collected {kept} attributed Easy Law pages; {flagged} need reuse review")
     print(f"RAG archive: {args.output / 'knowledge.tar.gz'}")
