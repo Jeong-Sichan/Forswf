@@ -1,15 +1,20 @@
 # Seraph에서 말맥 실행
 
+출처가 있는 문화 문서 수집→검색→KoRMo 시연→근거 기반 QLoRA의 최신 절차는 [KNOWLEDGE_PIPELINE.md](KNOWLEDGE_PIPELINE.md)를 먼저 보세요. 아래 내용은 기존 표현 해설만으로 실행하는 방법도 포함합니다.
+
 이 안내는 제공받은 Seraph 튜토리얼 3~6의 저장소·Slurm 규칙에 맞춘 것입니다. `aurora-g5`에서 RTX 3090 24GB 한 장과 PyTorch `2.5.1+cu121`의 CUDA 사용을 확인했습니다. GPU가 보이는 것과 Slurm 작업 할당은 별개이므로, 실제 작업은 할당된 계산 노드에서만 실행하세요.
 
 ## 저장 위치
 
 - 코드·가상환경·압축된 원본 데이터: `/data/$USER/...` (NAS)
-- 학습·평가 데이터, Hugging Face 모델 캐시, 중간 체크포인트: `/local_datasets/$USER/...` (할당받은 계산 노드의 로컬 디스크)
+- 학습·평가 데이터만: `/local_datasets/$USER/...` (할당받은 계산 노드의 로컬 디스크)
+- KoRMo 모델 캐시와 LoRA 어댑터: `/data/$USER/models/malmaek/...` (사용자 NAS 영역)
 - 학습과 평가 스크립트는 `/data` 경로를 데이터로 받으면 오류를 내도록 설정했습니다.
 - 로그인 노드에서는 Python 실행, 패키지 설치, 압축 해제, 대량 파일 검색을 하지 마세요.
 
 ## 코드를 서버로 옮기기
+
+현재 사용자는 `/data/jsc66519075/repos/swf/Forswf`에 저장소를 복제했습니다. 이 경로에서 `codex/malmaek-seraph` 브랜치로 전환했다면 아래 복제·전송 대안은 건너뛰세요. 이후 명령은 이 실제 체크아웃 경로를 기준으로 합니다.
 
 학교 서버에서 직접 복제할 수 있습니다. 오래된 VS Code `askpass.sh`가 Git 인증을 가로막는 경우, GitHub CLI가 설치돼 있다면 서버 셸에서 다음처럼 한 번 인증하세요. `gh auth login --web`이 표시하는 기기 인증 페이지를 **개인 PC 브라우저**에서 열어 승인합니다. 비밀번호나 토큰을 채팅에 보내지 마세요.
 
@@ -32,7 +37,7 @@ scp -P 30080 -r malmaek-prototype jsc66519075@aurora.khu.ac.kr:/data/jsc66519075
 
 ## 1. 데이터 준비
 
-파이썬으로 사례를 작성하려면 `prepare_dataset.py`의 `TRAIN`과 `EVAL` 목록을 편집하세요. 개인 PC 또는 할당받은 계산 노드에서 아래 명령을 실행하면 학습용 JSONL 두 파일과 전송용 압축 파일이 생성됩니다. JSONL은 학습 프로그램의 데이터 저장 형식일 뿐, 사람이 직접 작성해야 하는 형식이 아닙니다. 현재 예시 2개씩은 형식 확인용입니다. 직접 검토한 학습 사례를 최소 50개 이상, 표현이 겹치지 않는 평가 사례를 별도로 준비하세요.
+파이썬으로 사례를 작성하려면 `prepare_dataset.py`의 `TRAIN`과 `EVAL` 목록을 편집하세요. 각 기록에 `language`(`en` 또는 `ko`)를 넣습니다. 영어 답변이 기본이지만 같은 상황의 쉬운 한국어 답변도 준비합니다. 두 언어의 기록은 같은 학습/평가 분할에 둡니다. 개인 PC 또는 할당받은 계산 노드에서 아래 명령을 실행하면 학습용 JSONL 두 파일과 전송용 압축 파일이 생성됩니다. JSONL은 학습 프로그램의 데이터 저장 형식일 뿐, 사람이 직접 작성해야 하는 형식이 아닙니다. 현재 예시 상황은 학습 2개·평가 2개뿐이며 각 상황의 영어·한국어 답변은 형식 확인용입니다. `train_qlora.py`의 50건 하한은 품질 목표가 아닙니다. [데이터 계획](DATA_PLAN.md)에 따라 학습 200~500개 상황, 겹치지 않는 평가 50개 상황 이상을 목표로 하세요.
 
 ```bash
 python prepare_dataset.py --output-dir ./prepared-data
@@ -48,34 +53,54 @@ python prepare_dataset.py --output-dir ./prepared-data
 srun --gres=gpu:1 --cpus-per-gpu=8 --mem-per-gpu=32G -p <허용된_debug_partition> --pty bash
 ```
 
-**계산 노드 안에서** `nvidia-smi`와 `python -c 'import torch; print(torch.__version__, torch.cuda.is_available())'`를 확인하세요. 기존 `mlclass` 환경을 보존하려면 그 환경을 활성화한 상태에서 별도 가상환경을 사용합니다. 가상환경과 코드는 NAS에 둘 수 있지만, 대량 데이터와 모델 캐시는 로컬 디스크에 둡니다.
+**계산 노드 안에서** `nvidia-smi`와 `python -c 'import torch; print(torch.__version__, torch.cuda.is_available())'`를 확인하세요. 기존 `mlclass` 환경을 보존하려면 그 환경을 활성화한 상태에서 별도 가상환경을 사용합니다. 학습 데이터만 `/local_datasets`로 옮깁니다.
 
 ```bash
+cd /data/$USER/repos/swf/Forswf
 python -m venv --system-site-packages /data/$USER/envs/malmaek
 source /data/$USER/envs/malmaek/bin/activate
 python -c 'import torch; print(torch.__version__, torch.cuda.is_available())'
-python -m pip install -r /data/$USER/repos/malmaek-prototype/requirements-gpu.txt
+python -m pip install -r requirements-gpu.txt
 ```
 
-가상환경에서 CUDA가 `False`이거나 서버의 PyTorch를 상속하지 못하면 설치를 멈추고 환경 경로를 확인하세요. KoRMo 모델 카드의 라이선스, 접근 조건, 사용 방법도 다운로드 전에 확인해야 합니다. 현재 클라우드에서는 모델 카드와 학교 서버에 직접 접근할 수 없어 모델 로딩은 아직 검증되지 않았습니다.
+가상환경에서 CUDA가 `False`이거나 서버의 PyTorch를 상속하지 못하면 설치를 멈추고 환경 경로를 확인하세요. 사용자 계산 노드에서 KoRMo-10B-sft 4비트 로딩과 영어·한국어 생성은 확인했습니다. 새 검색기·QLoRA 학습은 별도로 검증해야 합니다.
+
+KoRMo 설정에는 모델 전용 코드(`_configuration_kormo.py`, `_modeling_kormo.py`)가 있습니다. 모델 저장소 코드를 실행하기 전 해당 파일을 검토하세요. 확인한 모델 커밋은 `547fa40eeb8c69d3c5e278daf906d315c4f8e7ea`입니다. 학습 배치 작업은 `KORMO_REVISION`을 상속합니다.
 
 ## 3. 짧은 검증과 학습
 
-`srun` 계산 노드에서 모델을 처음 불러올 때는 캐시를 로컬에 둡니다. 학습 데이터도 먼저 로컬로 옮깁니다. 아래 예시의 `malmaek-debug-1`은 새 실행마다 다른 이름으로 바꾸세요.
+`srun` 계산 노드에서 먼저 모델만 4비트로 불러와 답변 하나를 생성합니다. 모델 캐시는 사용자 `/data`에 둡니다. 첫 실행에는 KoRMo 가중치가 다운로드되어 시간이 걸릴 수 있습니다.
+
+KoRMo 전용 코드의 `create_causal_mask` 호출은 Transformers 4.57.0의 인자 이름과 필수 인자에 맞지 않습니다. 프로젝트의 `kormo_compat.py`가 메모리 안에서 호출 인자만 맞춥니다. Hugging Face 캐시에 내려받은 모델 파일은 수정하지 않습니다.
 
 ```bash
-export HF_HOME=/local_datasets/$USER/malmaek-debug-1/hf-cache
-bash /data/$USER/repos/malmaek-prototype/scripts/stage_dataset.sh /data/$USER/datasets/malmaek.tar.gz /local_datasets/$USER/malmaek-debug-1/data
-python /data/$USER/repos/malmaek-prototype/validate_data.py --train /local_datasets/$USER/malmaek-debug-1/data/train.jsonl --eval /local_datasets/$USER/malmaek-debug-1/data/eval.jsonl
+cd /data/$USER/repos/swf/Forswf
+export HF_HOME=/data/$USER/models/malmaek/hf-cache
+export KORMO_REVISION=547fa40eeb8c69d3c5e278daf906d315c4f8e7ea
+python demo.py --revision "$KORMO_REVISION" --smoke
 ```
 
-시연 코드는 `python /data/$USER/repos/malmaek-prototype/demo.py`로 실행합니다. 기본 바인딩은 계산 노드의 `127.0.0.1`이며, 자신의 SSH 터널이나 승인된 내부 경로로 접속해야 합니다. `--share`는 공개 링크가 필요할 때만 사용하세요.
-
-긴 학습은 로그인 노드에서 `sbatch`로 제출합니다. 제출 전에 학습에 사용할 가상환경을 활성화하고, 작업 디렉터리에서 `logs`를 만드세요. 스크립트는 데이터 압축 파일을 로컬에 복사·해제하고, 모델 캐시와 체크포인트도 로컬에 둡니다. 완료 후 LoRA 어댑터 압축 파일과 작은 비교 결과만 NAS의 `outputs`로 돌려놓습니다.
+영어 표현 해설, 쉬운 한국어 해설, 영어 질문을 **한 번의 모델 로딩**으로 확인하려면 `--smoke-suite`를 사용합니다. 질문하기 모드는 아직 별도 학습·평가 사례가 없으므로 이 결과는 기본 모델 기능 확인입니다.
 
 ```bash
-cd /data/$USER/repos/malmaek-prototype
+python demo.py --revision "$KORMO_REVISION" --smoke-suite
+```
+
+학습 데이터가 준비되면 그때 `/local_datasets`로 복사·해제합니다. 아래 예시의 `malmaek-debug-1`은 새 실행마다 다른 이름으로 바꾸세요.
+
+```bash
+bash scripts/stage_dataset.sh /data/$USER/datasets/malmaek.tar.gz /local_datasets/$USER/malmaek-debug-1/data
+python validate_data.py --train /local_datasets/$USER/malmaek-debug-1/data/train.jsonl --eval /local_datasets/$USER/malmaek-debug-1/data/eval.jsonl
+```
+
+시연 코드는 체크아웃 디렉터리에서 `python demo.py --revision "$KORMO_REVISION"`로 실행합니다. 기본 바인딩은 계산 노드의 `127.0.0.1`이며, 자신의 SSH 터널이나 승인된 내부 경로로 접속해야 합니다. `--share`는 공개 링크가 필요할 때만 사용하세요.
+
+긴 학습은 로그인 노드에서 `sbatch`로 제출합니다. 제출 전에 학습에 사용할 가상환경을 활성화하고, 작업 디렉터리에서 `logs`를 만드세요. 스크립트는 학습 데이터 압축 파일만 `/local_datasets`에 복사·해제합니다. 모델 캐시와 완성된 LoRA 어댑터는 사용자 `/data` 영역에 둡니다.
+
+```bash
+cd /data/$USER/repos/swf/Forswf
 source /data/$USER/envs/malmaek/bin/activate
+export KORMO_REVISION=547fa40eeb8c69d3c5e278daf906d315c4f8e7ea
 mkdir -p logs
 sbatch -p <허용된_batch_partition> scripts/train.slurm.sh /data/$USER/datasets/malmaek.tar.gz
 squeue -u "$USER"

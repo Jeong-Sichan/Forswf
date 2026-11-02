@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f8f7f1">
+  <meta name="description" content="유학생을 위한 한국 생활·문화 대화 안내, 말맥">
+  <title>말맥 · 한국 생활이 조금 더 가까워지는 곳</title>
+  <link rel="icon" href="/static/mascot.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <div id="sidebar-backdrop" class="sidebar-backdrop" hidden></div>
+    <aside class="sidebar" id="sidebar" aria-label="카테고리 탐색">
+      <a class="brand" href="/" aria-label="말맥 홈">
+        <span class="brand-mark"><img src="/static/mascot.svg" alt=""></span>
+        <span><strong>말맥</strong><small>MALMAEK</small></span>
+      </a>
+
+      <div class="sidebar-block">
+        <p class="eyebrow sidebar-label">새로운 이야기</p>
+        <button class="new-chat" id="new-chat" type="button"><span aria-hidden="true">✳</span> 새 대화 시작 <span class="new-chat-plus">＋</span></button>
+      </div>
+
+      <nav class="category-nav" aria-label="질문 카테고리">
+        <p class="eyebrow sidebar-label">궁금한 주제</p>
+        <button class="category-item active" type="button" data-category="all"><span class="category-icon icon-all">✦</span><span class="category-name">무엇이든 물어봐요<small>Ask anything</small></span><span class="nav-arrow">›</span></button>
+        <button class="category-item" type="button" data-category="culture"><span class="category-icon icon-culture">◈</span><span class="category-name">한국 문화<small>Culture</small></span><span class="nav-arrow">›</span></button>
+        <button class="category-item" type="button" data-category="etiquette"><span class="category-icon icon-etiquette">♡</span><span class="category-name">예절과 표현<small>Etiquette &amp; phrases</small></span><span class="nav-arrow">›</span></button>
+        <button class="category-item" type="button" data-category="food"><span class="category-icon icon-food">◕</span><span class="category-name">음식과 식사<small>Food &amp; dining</small></span><span class="nav-arrow">›</span></button>
+        <button class="category-item" type="button" data-category="transit"><span class="category-icon icon-transit">▥</span><span class="category-name">교통과 이동<small>Getting around</small></span><span class="nav-arrow">›</span></button>
+        <button class="category-item" type="button" data-category="life"><span class="category-icon icon-life">⌂</span><span class="category-name">유학생 생활<small>Student life</small></span><span class="nav-arrow">›</span></button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-note"><span class="sparkle">✦</span><p>낯선 표현부터 생활 정보까지,<br>말맥이 차근차근 도와드릴게요.</p></div>
+        <span class="footer-caption">Made for your everyday in Korea.</span>
+      </div>
+    </aside>
+
+    <main class="main-pane">
+      <header class="topbar">
+        <div class="topbar-left"><button id="menu-button" class="menu-button" type="button" aria-label="메뉴 열기" aria-expanded="false">☰</button><span class="topbar-route">말맥 <span>／</span> <strong id="route-label">무엇이든 물어봐요</strong></span></div>
+        <div class="topbar-right"><span id="service-status" class="service-status"><i></i> 연결 확인 중</span><label class="language-picker" for="language"><span>답변 언어</span><select id="language"><option value="auto">자동 선택</option><option value="en">English</option><option value="ko">한국어</option></select></label></div>
+      </header>
+
+      <div class="content-wrap">
+        <section class="welcome" id="welcome" aria-labelledby="hero-title">
+          <div class="hero-card">
+            <div class="hero-copy"><span class="hero-kicker"><span aria-hidden="true">✳</span> YOUR FRIEND IN KOREA</span><h1 id="hero-title">한국 생활,<br><em>말맥</em>과 함께라면.</h1><p>낯선 말과 문화가 궁금할 때, 편하게 물어보세요.<br>Everyday Korea, explained simply.</p><button id="hero-ask" class="hero-ask" type="button">말맥에게 물어보기 <span>↗</span></button></div>
+            <div class="hero-art"><span class="orbit orbit-one">안녕하세요!</span><span class="orbit orbit-two">Let's talk ✦</span><img src="/static/mascot.svg" alt="갓을 쓴 말맥 캐릭터"></div>
+          </div>
+
+          <div class="topics-header"><div><span class="section-kicker">START HERE</span><h2>어떤 이야기를 나눠볼까요?</h2></div><span>주제를 고르면 말맥이 먼저 인사해요</span></div>
+          <div class="topic-grid" id="topic-grid">
+            <button class="topic-card topic-culture" type="button" data-category="culture"><span class="topic-symbol">◈</span><strong>한국 문화</strong><span>명절, 전통, 일상 속 이야기</span><b aria-hidden="true">↗</b></button>
+            <button class="topic-card topic-etiquette" type="button" data-category="etiquette"><span class="topic-symbol">♡</span><strong>예절과 표현</strong><span>인사말, 높임말, 관계의 맥락</span><b aria-hidden="true">↗</b></button>
+            <button class="topic-card topic-food" type="button" data-category="food"><span class="topic-symbol">◕</span><strong>음식과 식사</strong><span>반찬부터 식당 안내문까지</span><b aria-hidden="true">↗</b></button>
+            <button class="topic-card topic-transit" type="button" data-category="transit"><span class="topic-symbol">▥</span><strong>교통과 이동</strong><span>버스, 지하철, 교통카드</span><b aria-hidden="true">↗</b></button>
+          </div>
+        </section>
+
+        <section class="chat-panel" id="chat-panel" aria-labelledby="chat-title">
+          <div class="chat-heading"><div class="chat-heading-avatar"><img src="/static/mascot.svg" alt=""></div><div><span class="chat-heading-kicker">YOUR KOREA COMPANION</span><h2 id="chat-title">말맥과 대화하기</h2></div><span class="chat-heading-end">✦ 함께 알아봐요</span></div>
+          <div class="messages" id="messages" aria-live="polite"></div>
+          <div class="suggestions" id="suggestions" aria-label="추천 질문"></div>
+          <form class="composer" id="composer"><label for="message-input" class="sr-only">말맥에게 질문하기</label><textarea id="message-input" rows="1" maxlength="500" placeholder="궁금한 것을 자유롭게 물어보세요…" required></textarea><button id="send-button" type="submit" aria-label="메시지 보내기"><span>보내기</span><span aria-hidden="true">↗</span></button></form>
+          <p class="chat-footnote">말맥의 답은 틀릴 수 있어요. 비자·계약 등 중요한 정보는 표시된 공식 출처에서 최신 내용을 확인하세요.</p>
+        </section>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

@@ -1,0 +1,115 @@
+# Topic-targeted candidate queries. Responses still require review and rights verification.
+# Social interaction and politeness
+인사
+안녕
+감사
+고맙다
+미안하다
+죄송하다
+실례
+양해
+부탁
+부탁하다
+부탁드리다
+수고
+수고하다
+존댓말
+반말
+높임말
+높이다
+말씀
+드리다
+뵙다
+여쭙다
+괜찮다
+거절
+사양하다
+배려
+눈치
+어색하다
+부담
+허락
+예의
+예절
+약속
+연락
+연락하다
+답장
+답변
+확인
+검토
+기다리다
+생각하다
+# Everyday expressions and idioms
+마음
+마음에 걸리다
+김이 새다
+기운이 빠지다
+속이 시원하다
+속
+기운
+갈피
+말이 통하다
+손이 크다
+눈치를 보다
+기분
+섭섭하다
+서운하다
+난감하다
+괜히
+일단
+나중에
+잠시
+조금
+# Restaurant, shopping, and transport
+반찬
+셀프
+주문
+계산
+결제
+영수증
+포장
+매장
+추가
+리필
+맵다
+알레르기
+식당
+예약
+환불
+교환
+환승
+하차
+승차
+교통카드
+정류장
+막차
+지하철
+버스
+# Housing, campus, and public life
+보증금
+월세
+관리비
+분리수거
+배출
+기숙사
+계약
+신청
+접수
+마감
+공지
+안내
+교수
+수업
+과제
+출석
+결석
+장학금
+학기
+등록금
+민원
+신분증
+주민등록
+설날
+추석
+명절

@@ -1,8 +1,11 @@
 """QLoRA format adaptation. Run on a GPU after checking the model license/card."""
 
 import argparse
+import json
+from pathlib import Path
 
-from prompting import messages, read_examples, render, require_local_dataset
+from prompting import messages, read_examples, render, require_local_dataset, require_pinned_revision
+from kormo_compat import fix_causal_mask_keyword
 
 
 def main() -> None:
@@ -10,12 +13,18 @@ def main() -> None:
     parser.add_argument("--train", required=True, help="Reviewed JSONL training data")
     parser.add_argument("--output", required=True)
     parser.add_argument("--model", default="KORMo-Team/KORMo-10B-sft")
+    parser.add_argument("--revision", required=True, help="Pinned Hugging Face model commit SHA")
     parser.add_argument("--epochs", type=float, default=2)
     parser.add_argument("--max-length", type=int, default=1536)
+    parser.add_argument("--format", choices=("explain", "dialogue"), default="explain")
+    parser.add_argument("--eval", help="Held-out JSONL under /local_datasets, for dialogue loss")
+    parser.add_argument("--require-evidence", action="store_true", help="Require reviewed, source-grounded examples")
     args = parser.parse_args()
 
+    require_pinned_revision(args.revision)
     require_local_dataset(args.train)
-    require_local_dataset(args.output)
+    if not Path(args.output).resolve().is_relative_to("/data"):
+        raise ValueError("LoRA 모델 출력은 /data 사용자 영역에 저장해 주세요")
 
     import torch
     from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
@@ -23,16 +32,35 @@ def main() -> None:
 
     if not torch.cuda.is_available():
         raise RuntimeError("QLoRA 학습에는 CUDA GPU가 필요합니다")
-    rows = read_examples(args.train)
-    if len(rows) < 50:
-        raise ValueError("50개 미만의 사례로 학습 결과를 주장하지 마세요. 검토한 데이터를 더 모아 주세요.")
+    if args.format == "dialogue":
+        def load_dialogue(path):
+            require_local_dataset(path)
+            data = [json.loads(line) for line in Path(path).read_text(encoding="utf-8").splitlines() if line.strip()]
+            if any(not isinstance(row.get(key), str) or not row[key].strip() for row in data for key in ("prompt", "answer", "source_group")):
+                raise ValueError("Dialogue rows need prompt, answer, and source_group")
+            return data
+        rows = load_dialogue(args.train)
+        evaluation_rows = load_dialogue(args.eval) if args.eval else None
+        if len(rows) < 1000:
+            raise ValueError("Dialogue training requires at least 1000 contextual examples")
+        if evaluation_rows and {row["source_group"] for row in rows} & {row["source_group"] for row in evaluation_rows}:
+            raise ValueError("Train/eval overlap on multisession source_group")
+    else:
+        rows = read_examples(args.train)
+        evaluation_rows = None
+        if args.require_evidence and any(row.get("reviewed") is not True or "evidence" not in row for row in rows):
+            raise ValueError("근거 기반 QLoRA에는 모든 사례의 reviewed=true와 evidence 목록이 필요합니다")
+        if len({row["expression"].strip() for row in rows}) < 50:
+            raise ValueError("서로 다른 표현 50개 미만으로 학습 결과를 주장하지 마세요. 검토한 데이터를 더 모아 주세요.")
 
     dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
-    tokenizer = AutoTokenizer.from_pretrained(args.model)
+    tokenizer = AutoTokenizer.from_pretrained(args.model, revision=args.revision, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     model = AutoModelForCausalLM.from_pretrained(
         args.model,
+        revision=args.revision,
+        trust_remote_code=True,
         device_map="auto",
         quantization_config=BitsAndBytesConfig(
             load_in_4bit=True,
@@ -40,6 +68,7 @@ def main() -> None:
             bnb_4bit_compute_dtype=dtype,
         ),
     )
+    fix_causal_mask_keyword(model)
     model.config.use_cache = False
     model = prepare_model_for_kbit_training(model)
     model = get_peft_model(
@@ -55,19 +84,24 @@ def main() -> None:
     )
 
     class Examples(torch.utils.data.Dataset):
-        def __init__(self):
+        def __init__(self, source_rows):
             self.items = []
-            for row in rows:
+            for row in source_rows:
+                if args.format == "dialogue":
+                    conversation = [
+                        {"role": "system", "content": "Continue the Korean dialogue with one natural reply. Do not add explanations."},
+                        {"role": "user", "content": row["prompt"]},
+                    ]
+                else:
+                    conversation = messages(row["expression"], row["situation"], row["relationship"], row["language"], row["task"], row.get("evidence"))
                 prompt = render(
-                    tokenizer,
-                    messages(row["expression"], row["situation"], row["relationship"]),
-                    True,
+                    tokenizer, conversation, True,
                 )
                 completion = row["answer"].strip() + tokenizer.eos_token
                 prompt_ids = tokenizer(prompt, add_special_tokens=False)["input_ids"]
                 answer_ids = tokenizer(completion, add_special_tokens=False)["input_ids"]
                 if len(prompt_ids) + len(answer_ids) > args.max_length:
-                    raise ValueError(f"사례가 max-length를 초과합니다: {row['expression'][:30]}")
+                    raise ValueError(f"사례가 max-length를 초과합니다: {(row.get('expression') or row.get('prompt'))[:30]}")
                 self.items.append({
                     "input_ids": prompt_ids + answer_ids,
                     "attention_mask": [1] * (len(prompt_ids) + len(answer_ids)),
@@ -99,17 +133,22 @@ def main() -> None:
             learning_rate=1e-4,
             warmup_ratio=0.03,
             logging_steps=5,
-            save_strategy="epoch",
+            save_strategy="steps",
+            save_steps=100,
+            save_total_limit=2,
             gradient_checkpointing=True,
             bf16=dtype == torch.bfloat16,
             fp16=dtype == torch.float16,
             optim="paged_adamw_8bit",
             report_to="none",
         ),
-        train_dataset=Examples(),
+        train_dataset=Examples(rows),
+        eval_dataset=Examples(evaluation_rows) if evaluation_rows else None,
         data_collator=collate,
     )
     trainer.train()
+    if evaluation_rows:
+        print("held-out dialogue loss:", trainer.evaluate()["eval_loss"])
     trainer.save_model(args.output)
     tokenizer.save_pretrained(args.output)
 

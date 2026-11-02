@@ -1,0 +1,122 @@
+"""Small checks for user-facing English answers from KoRMo."""
+
+import re
+
+from pronunciation import romanize
+
+
+HEADINGS = {
+    "explain": (
+        "1. Plain meaning", "2. Meaning in this situation",
+        "3. What to say or do", "4. What could change the meaning",
+    ),
+    "ask": (
+        "1. Korean phrase", "2. When to use it",
+        "3. What to say or do", "4. What may vary",
+    ),
+}
+KOREAN_HEADINGS = {
+    "explain": ("1. 쉬운 뜻", "2. 상황에 따른 해석", "3. 적절한 말이나 행동", "4. 달라질 수 있는 점"),
+    "ask": ("1. 추천 표현", "2. 사용하는 상황", "3. 적절한 말이나 행동", "4. 달라질 수 있는 점"),
+}
+
+PRONOUNCED_KOREAN = re.compile(
+    r"[\"'“‘]?[가-힣][가-힣 ]{0,39}[\"'”’]?\s*\([A-Za-z][A-Za-z\s'-]*\)"
+)
+READING_AFTER_PHRASE = r"([\"'”’]?)(?:\s*\(([A-Za-z\s'-]+)\))?(?:\s*\(([A-Za-z\s'-]+)\))?"
+
+
+def _replace_reading(match: re.Match[str], phrase: str) -> str:
+    closing_quote, *parentheses = match.groups()
+    corrected = phrase + closing_quote + " (" + romanize(phrase) + ")"
+    for existing in parentheses:
+        if existing and existing.count("-") >= 2:
+            continue
+        if existing and re.search(r"\b(?:I|you|we|it|is|are|the|a|an|to|will|think|means)\b", existing, re.I):
+            corrected += " (" + existing + ")"
+    return corrected
+
+
+def normalize_pronunciation(answer: str, task: str, expression: str) -> str:
+    """Replace model-written readings for the taught phrase with a consistent reading."""
+    if task == "explain":
+        phrase = expression.strip().rstrip(".!?。！？ ")
+        if not re.search(r"[가-힣]", phrase):
+            return answer
+        pattern = re.compile(re.escape(phrase) + READING_AFTER_PHRASE)
+        replacement = phrase + " (" + romanize(phrase) + ")"
+        answer, count = pattern.subn(lambda match: _replace_reading(match, phrase), answer)
+        if not count and HEADINGS["explain"][0] in answer:
+            answer = answer.replace(HEADINGS["explain"][0], HEADINGS["explain"][0] + "\n" + replacement, 1)
+        return answer
+    if task == "ask" and HEADINGS["ask"][0] in answer:
+        start = answer.find(HEADINGS["ask"][0]) + len(HEADINGS["ask"][0])
+        end = answer.find(HEADINGS["ask"][1], start)
+        if end < 0:
+            end = len(answer)
+        section = answer[start:end]
+        phrase = re.search(r"[가-힣]+(?: [가-힣]+)*", section)
+        if phrase:
+            pattern = re.compile(re.escape(phrase.group()) + READING_AFTER_PHRASE)
+            section = pattern.sub(lambda match: _replace_reading(match, phrase.group()), section, count=1)
+            return answer[:start] + section + answer[end:]
+    if task == "ask" and re.match(r"^\s*1\.\s*[가-힣]", answer):
+        answer = re.sub(r"^(\s*)1\.\s*", lambda match: match.group(1) + HEADINGS["ask"][0] + "\n", answer, count=1)
+        return normalize_pronunciation(answer, task, expression)
+    return answer
+
+
+def english_issues(answer: str, task: str) -> list[str]:
+    issues = []
+    if task in HEADINGS:
+        positions = [answer.find(heading) for heading in HEADINGS[task]]
+        if any(position < 0 for position in positions) or positions != sorted(positions):
+            issues.append("missing or out-of-order English sections")
+        else:
+            for index, position in enumerate(positions):
+                start = position + len(HEADINGS[task][index])
+                end = positions[index + 1] if index < 3 else len(answer)
+                section = answer[start:end].strip(" \n\t:*#-")
+                if len(section) < 8:
+                    issues.append("empty English section")
+                    break
+                english = PRONOUNCED_KOREAN.sub("", section)
+                if task == "ask" and index == 0:
+                    continue
+                if len(re.findall(r"[A-Za-z]+", english)) < (3 if index == 0 else 2):
+                    issues.append("section lacks English explanation")
+                    break
+    hangul = len(re.findall(r"[가-힣]", answer))
+    pronounced = PRONOUNCED_KOREAN.findall(answer)
+    remaining = PRONOUNCED_KOREAN.sub("", answer)
+    for matched in pronounced:
+        phrase = re.search(r"[가-힣]+(?: [가-힣]+)*", matched)
+        if phrase:
+            remaining = remaining.replace(phrase.group(), "")
+    unpronounced = len(re.findall(r"[가-힣]", remaining))
+    if task in HEADINGS and not hangul:
+        issues.append("missing Korean expression")
+    if task in HEADINGS and hangul and not pronounced:
+        issues.append("missing Latin-letter pronunciation")
+    if unpronounced > 8:
+        issues.append("Korean prose in English answer")
+    return issues
+
+
+def korean_issues(answer: str, task: str) -> list[str]:
+    if len(re.findall(r"[가-힣]", answer)) < 6:
+        return ["Korean draft is too short"]
+    if task in KOREAN_HEADINGS:
+        positions = [answer.find(heading) for heading in KOREAN_HEADINGS[task]]
+        if any(position < 0 for position in positions) or positions != sorted(positions):
+            return ["Korean draft lacks required sections"]
+        for index, position in enumerate(positions):
+            end = positions[index + 1] if index < 3 else len(answer)
+            if len(answer[position + len(KOREAN_HEADINGS[task][index]):end].strip(" \n\t:*#-")) < 4:
+                return ["Korean draft has an empty section"]
+    return []
+
+
+def remove_inline_citations(answer: str) -> str:
+    """Keep source attribution in the separate footer, not in answer prose."""
+    return re.sub(r"\s*\[\d+\]", "", answer).strip()
