@@ -23,14 +23,17 @@ KOREAN_HEADINGS = {
 PRONOUNCED_KOREAN = re.compile(
     r"[\"'“‘]?[가-힣][가-힣 ]{0,39}[\"'”’]?\s*\([A-Za-z][A-Za-z\s'-]*\)"
 )
-READING_AFTER_PHRASE = r"([\"'”’]?)(?:\s*\(([A-Za-z\s'-]+)\))?"
+READING_AFTER_PHRASE = r"([\"'”’]?)(?:\s*\(([A-Za-z\s'-]+)\))?(?:\s*\(([A-Za-z\s'-]+)\))?"
 
 
 def _replace_reading(match: re.Match[str], phrase: str) -> str:
-    closing_quote, existing = match.groups()
+    closing_quote, *parentheses = match.groups()
     corrected = phrase + closing_quote + " (" + romanize(phrase) + ")"
-    if existing and re.search(r"\b(?:I|you|we|it|is|are|the|a|an|to|will|think|means)\b", existing, re.I):
-        corrected += " (" + existing + ")"
+    for existing in parentheses:
+        if existing and existing.count("-") >= 2:
+            continue
+        if existing and re.search(r"\b(?:I|you|we|it|is|are|the|a|an|to|will|think|means)\b", existing, re.I):
+            corrected += " (" + existing + ")"
     return corrected
 
 
@@ -57,6 +60,9 @@ def normalize_pronunciation(answer: str, task: str, expression: str) -> str:
             pattern = re.compile(re.escape(phrase.group()) + READING_AFTER_PHRASE)
             section = pattern.sub(lambda match: _replace_reading(match, phrase.group()), section, count=1)
             return answer[:start] + section + answer[end:]
+    if task == "ask" and re.match(r"^\s*1\.\s*[가-힣]", answer):
+        answer = re.sub(r"^(\s*)1\.\s*", lambda match: match.group(1) + HEADINGS["ask"][0] + "\n", answer, count=1)
+        return normalize_pronunciation(answer, task, expression)
     return answer
 
 
@@ -75,12 +81,19 @@ def english_issues(answer: str, task: str) -> list[str]:
                     issues.append("empty English section")
                     break
                 english = PRONOUNCED_KOREAN.sub("", section)
-                if len(re.findall(r"[A-Za-z]+", english)) < (3 if index == 0 and task == "explain" else 2):
+                if task == "ask" and index == 0:
+                    continue
+                if len(re.findall(r"[A-Za-z]+", english)) < (3 if index == 0 else 2):
                     issues.append("section lacks English explanation")
                     break
     hangul = len(re.findall(r"[가-힣]", answer))
     pronounced = PRONOUNCED_KOREAN.findall(answer)
-    unpronounced = len(re.findall(r"[가-힣]", PRONOUNCED_KOREAN.sub("", answer)))
+    remaining = PRONOUNCED_KOREAN.sub("", answer)
+    for matched in pronounced:
+        phrase = re.search(r"[가-힣]+(?: [가-힣]+)*", matched)
+        if phrase:
+            remaining = remaining.replace(phrase.group(), "")
+    unpronounced = len(re.findall(r"[가-힣]", remaining))
     if task in HEADINGS and not hangul:
         issues.append("missing Korean expression")
     if task in HEADINGS and hangul and not pronounced:

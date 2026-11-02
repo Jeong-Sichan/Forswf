@@ -60,6 +60,7 @@ class OutputStyleTests(unittest.TestCase):
         turns = messages("반찬은 셀프입니다", "Restaurant sign", "Customer", evidence=[])
         self.assertIn("Latin-letter pronunciation", turns[0]["content"])
         self.assertIn("Do not put bracket citation numbers", turns[0]["content"])
+        self.assertIn("do not reverse who said the phrase", turns[0]["content"])
 
     def test_failed_korean_greeting_can_be_rewritten_in_english(self):
         original = messages("How do I greet a professor?", "First meeting", "Student and professor", task="ask")
@@ -119,6 +120,28 @@ class OutputStyleTests(unittest.TestCase):
         )
         corrected = normalize_pronunciation(answer, "ask", "How do I greet an older adult?")
         self.assertIn("안녕하세요 (annyeonghaseyo)", corrected)
+        self.assertEqual(english_issues(corrected, "ask"), [])
+
+    def test_observed_greeting_answer_is_not_discarded(self):
+        answer = (
+            "1. 안녕하세요 (An-nyeong-ha-se-yo)\n"
+            "2. When to use it: Use this phrase when meeting someone for the first time.\n"
+            "3. What to say or do: Smile and say ‘안녕하세요’ with a small nod.\n"
+            "4. What may vary: The level of formality depends on the context."
+        )
+        corrected = normalize_pronunciation(answer, "ask", "How should I greet an older adult?")
+        self.assertTrue(corrected.startswith("1. Korean phrase\n안녕하세요 (annyeonghaseyo)"))
+        self.assertEqual(english_issues(corrected, "ask"), [])
+
+    def test_duplicate_model_reading_is_removed(self):
+        answer = (
+            "1. Korean phrase\n안녕하세요 (annyeonghaseyo) (An-nyeong-ha-se-yo)\n"
+            "2. When to use it\nUse it at a first meeting.\n"
+            "3. What to say or do\nSay hello politely.\n"
+            "4. What may vary\nA formal event may be different."
+        )
+        corrected = normalize_pronunciation(answer, "ask", "How should I greet someone?")
+        self.assertNotIn("An-nyeong-ha-se-yo", corrected)
         self.assertEqual(english_issues(corrected, "ask"), [])
 
 
