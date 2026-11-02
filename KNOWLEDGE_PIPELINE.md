@@ -33,6 +33,18 @@ python demo.py --revision "$KORMO_REVISION" \
 
 `--smoke-student`는 공식 발췌를 넣은 **유학생 생활 질문**을 한 번 생성한다. 답변의 모든 사실과 `[1]` 인용이 검색 발췌에 실제로 있는지 사람이 확인한다. 이 법령 자료는 말투·식당 예절의 근거가 아니다. 한국어 생활 질문에서 검색 문서 제목의 주제어가 맞지 않으면 출처가 없다고 안내한다. 영어 질문에는 기본 E5 검색기를 사용해 교차 언어 검색을 별도로 시험하되, 무관한 문서가 반환되는지 직접 검토한다. 최신 절차는 화면의 기준일과 하이코리아 등 현재 담당기관 안내를 다시 확인한다.
 
+AI Hub 대화 어댑터 학습을 마치면 `--compare-adapter`로 기본 KoRMo와 같은 모델에 어댑터를 붙인 KoRMo를 한 번의 모델 로딩으로 비교한다. 표현·인사 3건은 자료 없이 비교하고, `--knowledge`가 있으면 외국인등록 질문도 동일한 검색 발췌로 비교한다. 이 비교는 수동 진단이며 대화 이어 말하기 평가 손실만으로 문화·생활 답변의 개선을 주장하지 않는다.
+
+```bash
+cd /data/$USER/repos/swf/Forswf
+source /data/$USER/envs/malmaek/bin/activate
+export HF_HOME=/data/$USER/models/malmaek/hf-cache
+export KORMO_REVISION=547fa40eeb8c69d3c5e278daf906d315c4f8e7ea
+python demo.py --revision "$KORMO_REVISION" \
+  --adapter /data/$USER/models/malmaek/dialogue-adapter-<job-id> \
+  --compare-adapter
+```
+
 한국어기초사전의 `사전 검색` API에 대해서는 사용자 제공 공식 안내 화면에서 `https://krdict.korean.go.kr/api/search`, `key`·`q`·`start` 요청 변수 및 XML의 `target_code`·`word`·`sup_no`·`example`·`link` 필드를 확인했다. 이를 읽는 [검색 후보 수집기](scripts/collect_krdict.py)가 있다. 이 응답에는 **뜻풀이가 없으므로** 아직 검색 지식 문서로 합치지 않는다. `사전 내용` API 응답과 뜻풀이·용례 이용 조건을 확인한 뒤에만 본문 수집과 RAG 색인을 추가한다.
 
 발급받은 키를 명령줄 인자나 코드에 적지 말고, 할당받은 계산 노드의 셸에서 입력한다. 이미 캡처에 노출한 개인 키라면 먼저 재발급한다.
@@ -179,7 +191,7 @@ sbatch -p <허용된_batch_partition> scripts/train.slurm.sh \
   /data/$USER/datasets/malmaek-knowledge/knowledge.tar.gz
 ```
 
-`outputs/comparison-<job-id>.jsonl`에는 KoRMo 단독, KoRMo+검색, QLoRA 단독, QLoRA+검색 결과가 들어간다. 특히 **KoRMo+검색과 QLoRA+검색**을 동일한 검색 결과로 비교한다. 평가는 뜻 정확성, 맥락 적합성, 실제 행동의 유용성, 근거 일치·근거 없는 단정 회피를 사람이 블라인드 채점한다. 학습 실행과 성능 개선은 아직 서버에서 검증되지 않았다.
+`outputs/comparison-<job-id>.jsonl`에는 KoRMo 단독, KoRMo+검색, QLoRA 단독, QLoRA+검색 결과가 들어간다. 특히 **KoRMo+검색과 QLoRA+검색**을 동일한 검색 결과로 비교한다. 평가는 뜻 정확성, 맥락 적합성, 실제 행동의 유용성, 근거 일치·근거 없는 단정 회피를 사람이 블라인드 채점한다. 검수된 문화·생활 답안으로 학습한 모델의 성능 개선은 아직 서버에서 검증되지 않았다.
 
 ```bash
 python -m scripts.make_blind_eval \

@@ -16,9 +16,12 @@ def main() -> None:
     parser.add_argument("--smoke", action="store_true", help="Generate one answer and exit without a web server")
     parser.add_argument("--smoke-suite", action="store_true", help="Test English, Korean, and an English question in one load")
     parser.add_argument("--smoke-student", action="store_true", help="Test a sourced student-life question")
+    parser.add_argument("--compare-adapter", action="store_true", help="Compare base and LoRA answers using one model load")
     parser.add_argument("--share", action="store_true", help="Create a temporary Gradio link")
     args = parser.parse_args()
     require_pinned_revision(args.revision)
+    if args.compare_adapter and not args.adapter:
+        parser.error("--compare-adapter requires --adapter")
     index = None
     if args.knowledge:
         from knowledge import BM25Index, E5Index, guide_source_matches, load_chunks
@@ -52,14 +55,16 @@ def main() -> None:
         model = PeftModel.from_pretrained(model, args.adapter)
     model.eval()
 
-    def explain(expression: str, situation: str, relationship: str, language: str, task: str) -> str:
+    def generate_answer(expression: str, situation: str, relationship: str, language: str, task: str,
+                        use_knowledge: bool) -> str:
         try:
-            if task == "guide" and index is None:
+            active_index = index if use_knowledge else None
+            if task == "guide" and active_index is None:
                 return "Student-life questions need a knowledge index. / 유학생 생활 질문에는 지식 자료가 필요합니다."
-            found = index.search(expression + " " + situation, limit=1 if task == "guide" else 2) if index else None
+            found = active_index.search(expression + " " + situation, limit=1 if task == "guide" else 2) if active_index else None
             if task == "guide" and found and not guide_source_matches(expression, found[0]):
                 found = []
-            if index and not found:
+            if active_index and not found:
                 return "I could not find a relevant source. Please add context or check another source. / 관련 출처를 찾지 못했습니다. 상황을 더 알려주세요."
             if found is not None:
                 from knowledge import evidence_for_prompt
@@ -88,6 +93,9 @@ def main() -> None:
             answer += source_footer(found)
         return answer
 
+    def explain(expression: str, situation: str, relationship: str, language: str, task: str) -> str:
+        return generate_answer(expression, situation, relationship, language, task, True)
+
     if args.smoke:
         print(explain("반찬은 셀프입니다", "A sign on the wall of a restaurant", "Customer and restaurant", "en", "explain"))
         return
@@ -105,6 +113,21 @@ def main() -> None:
 
     if args.smoke_student:
         print(explain("외국인등록은 어디서 신청하나요?", "한국에 온 유학생", "", "ko", "guide"))
+        return
+
+    if args.compare_adapter:
+        checks = [
+            ("Restaurant sign / 식당 안내", "반찬은 셀프입니다", "A sign in a restaurant", "Customer and restaurant", "en", "explain"),
+            ("Indirect reply / 완곡한 답", "생각해 볼게요", "A friend replies to an invitation", "Friends", "en", "explain"),
+            ("Greeting / 인사", "How should I greet a professor in Korea?", "Meeting a professor for the first time", "Student and professor", "en", "ask"),
+        ]
+        if index:
+            checks.append(("Student life / 유학생 생활", "외국인등록은 어디서 신청하나요?", "한국에 온 유학생", "", "ko", "guide"))
+        for label, expression, situation, relationship, language, task in checks:
+            print(f"\n=== {label} ===", flush=True)
+            with model.disable_adapter():
+                print("--- Base KoRMo ---\n" + generate_answer(expression, situation, relationship, language, task, task == "guide"), flush=True)
+            print("--- KoRMo + dialogue LoRA ---\n" + generate_answer(expression, situation, relationship, language, task, task == "guide"), flush=True)
         return
 
     with gr.Blocks(title="말맥 | 한국어 맥락 해설기") as ui:
