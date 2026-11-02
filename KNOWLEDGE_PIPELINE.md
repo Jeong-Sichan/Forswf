@@ -79,6 +79,17 @@ python -m scripts.prepare_review_queue --knowledge "$local_knowledge/chunks.json
 
 이 CSV의 64개 사례는 **모두 미검수 초안**이며 검색 결과는 정답 출처가 아닌 후보일 뿐이다. 검수자는 각 사례의 한국어 뜻·맥락·행동 제안·불확실성을 확인하고, 근거 문단이 실제로 해당 주장과 관련 있는지 읽는다. 관련이 없으면 출처를 빼거나 다른 자료를 찾는다. 영어·쉬운 한국어 답안을 작성하고 답에 `[1]`처럼 근거 번호를 넣는다. 출처가 없는 관습을 단정하거나 학습 자료로 승격하지 않는다.
 
+CSV에서 `source_supports_claim`은 실제로 뒷받침할 때만 `YES`, 아니면 `NO`로 적는다. 근거가 있는 답에는 해당 문장에 `[1]`을 붙이고, 근거가 없으면 인용하지 않는다. 한국어 답 네 칸과 영어 답 네 칸을 읽고 수정한다. `reviewer`를 채운 뒤 `reviewed=YES`로 바꾼다. [내보내기 도구](scripts/export_reviewed.py)는 검수 완료 행만 받아 같은 상황의 영어·한국어를 같은 학습/평가 분할에 둔다. 영어 네 칸이 비어 있으면 한국어 행만 내보내므로, 최종 영어 중심 학습에는 `--require-bilingual`을 사용한다.
+
+```bash
+python -m scripts.export_reviewed \
+  --reviewed-csv /data/$USER/datasets/malmaek-review-64.csv \
+  --output-dir /data/$USER/datasets/malmaek-reviewed \
+  --require-bilingual
+```
+
+64건을 모두 검수한 시범 분할은 약 51개 학습 상황과 13개 평가 상황이다. 이는 QLoRA 실행 확인용 규모이며, 성능 일반화를 주장할 최종 평가셋 크기는 아니다.
+
 Python으로 사례를 편집하려면 `prepare_dataset.py`의 `TRAIN`·`EVAL`을 사용한다. 각 레코드에 기존 필드 외에 아래 필드를 추가한다. `evidence=[]`는 근거가 부족한 질문의 보류 사례다. `reviewed=True`는 **실제로 사람이 검수한 뒤에만** 적는다.
 
 ```python
