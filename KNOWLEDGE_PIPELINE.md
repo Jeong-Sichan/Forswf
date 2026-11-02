@@ -72,6 +72,17 @@ python demo.py --revision "$KORMO_REVISION" --knowledge "$local_knowledge/chunks
 
 ## 4. QLoRA용 검수 자료
 
+국립국어원의 **일상 대화 말뭉치 2025**를 내려받을 수 있다면, 이용 조건을 확인하고 압축 원본은 `/data/$USER/datasets/`에 보관한다. 할당받은 계산 노드에서 `/local_datasets/$USER/`로 복사·압축 해제한 뒤, 실제 JSON에 `utterance` 배열과 `form`·`speaker_id`가 있는지 확인한다. 아래 명령의 두 경로는 실제로 압축을 해제한 폴더에 맞춘 예시다. `form`만 사용하고 `original_form`과 원래 화자 ID는 출력하지 않는다.
+
+```bash
+python -m scripts.extract_dialogue_candidates \
+  --input-dir /local_datasets/$USER/malmaek-corpus-<job-id>/raw \
+  --output /local_datasets/$USER/malmaek-corpus-<job-id>/dialogue_candidates.jsonl \
+  --max-cases 3000
+```
+
+이 결과는 출처를 추적할 수 있는 **미검수 대화 후보**다. 여기서 상황·질문·영어/한국어 답안을 작성하고 중복·개인정보·이용 조건을 확인해야 QLoRA 학습 데이터가 된다. 압축 형식과 실제 JSON 구조가 확인되면 Seraph 스테이징 명령을 구체화한다.
+
 ```bash
 python -m scripts.prepare_review_queue \
   --output /data/$USER/datasets/malmaek-review-64.csv
