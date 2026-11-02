@@ -100,20 +100,6 @@ python -m scripts.export_reviewed \
 
 64건을 모두 검수한 시범 분할은 약 51개 학습 상황과 13개 평가 상황이다. 이는 QLoRA 실행 확인용 규모이며, 성능 일반화를 주장할 최종 평가셋 크기는 아니다.
 
-검수를 마치기 전에 GPU 학습 경로를 먼저 확인하려면 [시범 데이터 내보내기](scripts/export_pilot.py)를 사용한다. 이 파일의 모든 레코드에는 `reviewed=false`, `pilot_only=true`가 남는다. 출처는 비워 두며 QLoRA의 출처 인용 능력 개선을 주장할 수 없다. 영어 초안이 완성된 행만 영어 학습 레코드로 들어간다.
-
-```bash
-python -m scripts.export_pilot \
-  --draft-csv /data/$USER/datasets/malmaek-review-64-en-draft.csv \
-  --output-dir /data/$USER/datasets/malmaek-pilot
-unset MALMAEK_REQUIRE_EVIDENCE
-mkdir -p logs
-sbatch -p <허용된_batch_partition> scripts/train.slurm.sh \
-  /data/$USER/datasets/malmaek-pilot/malmaek-pilot.tar.gz
-```
-
-Slurm 작업은 압축 학습 자료를 `/local_datasets/$USER`로 옮기고, LoRA 어댑터는 `/data/$USER/models/malmaek/adapter-<job-id>`에 저장한다. 작업 출력의 원본 대 QLoRA 비교는 **개발용 진단**이며 미검수 평가셋에서 얻은 점수를 제출용 성능 수치로 쓰지 않는다.
-
 Python으로 사례를 편집하려면 `prepare_dataset.py`의 `TRAIN`·`EVAL`을 사용한다. 각 레코드에 기존 필드 외에 아래 필드를 추가한다. `evidence=[]`는 근거가 부족한 질문의 보류 사례다. `reviewed=True`는 **실제로 사람이 검수한 뒤에만** 적는다.
 
 ```python
