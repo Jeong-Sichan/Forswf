@@ -1,12 +1,13 @@
 import unittest
 import asyncio
+import threading
 
 import httpx
 
 from knowledge import BM25Index, chunk_document
-from webapp.engine import Settings, answer_language, chat_messages, with_history
+from webapp.engine import ModelEngine, Settings, answer_language, chat_messages, should_use_adapter, weak_korean_answer, with_history
 from webapp.main import create_app
-from webapp.retrieval import KnowledgeHub, infer_topic
+from webapp.retrieval import KnowledgeHub, Selection, infer_topic
 from webapp.schemas import ChatRequest, ChatResponse
 
 
@@ -88,6 +89,54 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(infer_topic("housing lease"), "life")
         self.assertEqual(found.source_type, "official")
         self.assertEqual(found.passages[0]["source_id"], lease["source_id"])
+
+    def test_everyday_transit_skips_unrelated_law_passage(self):
+        law = {"source_id": "easylaw:661:1.3.2", "title": "안전한 버스 만들기 · 법제처",
+               "url": "https://example.org/bus", "license": "attribution",
+               "text": "버스 운전자의 자격과 안전 운행에 관한 법률입니다. " * 12}
+        chunks = chunk_document(law)
+        hub = KnowledgeHub.__new__(KnowledgeHub)
+        hub.corpora = {"law": chunks, "culture": [], "wiki": []}
+        hub.index = BM25Index(chunks)
+        for question in ("강남에서 홍대입구가려면 어떻게 해야해?", "버스 승차하려면 어떻게 해야해?"):
+            selected = hub.select(question, "all")
+            self.assertEqual(selected.topic, "transit")
+            self.assertEqual(selected.source_type, "general")
+            self.assertFalse(selected.requires_source)
+            self.assertEqual(selected.passages, [])
+        everyday_life = hub.select("한국 편의점에서는 어떻게 계산하나요?", "life")
+        self.assertEqual(everyday_life.source_type, "general")
+        self.assertFalse(everyday_life.requires_source)
+
+    def test_factual_transit_uses_base_even_when_adapter_is_loaded(self):
+        self.assertFalse(should_use_adapter("/adapter", "ko", "transit"))
+        self.assertTrue(should_use_adapter("/adapter", "ko", "etiquette"))
+        self.assertTrue(weak_korean_answer("버스 승차하려면 어떻게 해야해?", "버스 승차하려면 어떻게 해야해?"))
+        engine = ModelEngine.__new__(ModelEngine)
+        engine.settings = Settings(adapter="/adapter")
+        engine.hub = type("Hub", (), {"select": lambda *args: Selection("transit", "general", [])})()
+        engine.lock = threading.Lock()
+        seen = []
+        def infer(_turns, base_only):
+            seen.append(base_only)
+            return "버스 정류장에서 노선을 확인하고 도착한 버스에 탑승하세요."
+        engine._infer = infer
+        answer = engine.reply(ChatRequest(message="버스 승차하려면 어떻게 해야해?", category="transit"))
+        self.assertEqual(seen, [True])
+        self.assertFalse(answer.used_adapter)
+        self.assertEqual(answer.sources, [])
+
+    def test_fare_evasion_can_still_use_its_official_passage(self):
+        law = {"source_id": "easylaw:661:1.2.1", "title": "부정승차 하지 않기 · 법제처",
+               "url": "https://example.org/fare", "license": "attribution",
+               "text": "버스에서 운임을 내지 않는 무임승차는 부정승차에 해당합니다. " * 12}
+        chunks = chunk_document(law)
+        hub = KnowledgeHub.__new__(KnowledgeHub)
+        hub.corpora = {"law": chunks, "culture": [], "wiki": []}
+        hub.index = BM25Index(chunks)
+        selected = hub.select("버스 무임승차 벌금은 어떻게 되나요?", "all")
+        self.assertEqual(selected.source_type, "official")
+        self.assertEqual(selected.passages[0]["source_id"], law["source_id"])
 
 
 if __name__ == "__main__":
