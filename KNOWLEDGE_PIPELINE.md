@@ -73,11 +73,11 @@ python demo.py --revision "$KORMO_REVISION" --knowledge "$local_knowledge/chunks
 ## 4. QLoRA용 검수 자료
 
 ```bash
-python -m scripts.prepare_review_queue --knowledge "$local_knowledge/chunks.jsonl" \
+python -m scripts.prepare_review_queue \
   --output /data/$USER/datasets/malmaek-review-64.csv
 ```
 
-이 CSV의 64개 사례는 **모두 미검수 초안**이며 검색 결과는 정답 출처가 아닌 후보일 뿐이다. 검수자는 각 사례의 한국어 뜻·맥락·행동 제안·불확실성을 확인하고, 근거 문단이 실제로 해당 주장과 관련 있는지 읽는다. 관련이 없으면 출처를 빼거나 다른 자료를 찾는다. 영어·쉬운 한국어 답안을 작성하고 답에 `[1]`처럼 근거 번호를 넣는다. 출처가 없는 관습을 단정하거나 학습 자료로 승격하지 않는다.
+이 CSV의 64개 사례는 **모두 미검수 초안**이다. 위키백과의 유사도 검색 결과는 대화 표현의 근거가 아니어서 자동으로 붙이지 않는다. 검수자는 한국어 뜻·맥락·행동 제안·불확실성을 확인하고 영어·쉬운 한국어 답안을 작성한다. 특정 문화 사실을 주장하는 경우 실제로 그 주장을 뒷받침하는 자료를 별도로 찾아 출처 칸에 넣는다. 출처가 없으면 문화적 관습을 단정하지 않는다.
 
 CSV에서 `source_supports_claim`은 실제로 뒷받침할 때만 `YES`, 아니면 `NO`로 적는다. 근거가 있는 답에는 해당 문장에 `[1]`을 붙이고, 근거가 없으면 인용하지 않는다. 한국어 답 네 칸과 영어 답 네 칸을 읽고 수정한다. `reviewer`를 채운 뒤 `reviewed=YES`로 바꾼다. [내보내기 도구](scripts/export_reviewed.py)는 검수 완료 행만 받아 같은 상황의 영어·한국어를 같은 학습/평가 분할에 둔다. 영어 네 칸이 비어 있으면 한국어 행만 내보내므로, 최종 영어 중심 학습에는 `--require-bilingual`을 사용한다.
 
