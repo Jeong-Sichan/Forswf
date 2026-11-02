@@ -5,7 +5,7 @@ from contextlib import nullcontext
 
 from prompting import guide_messages, messages, render, require_pinned_revision
 from kormo_compat import fix_causal_mask_keyword
-from output_style import english_issues, remove_inline_citations
+from output_style import HEADINGS, english_issues, normalize_pronunciation, remove_inline_citations
 
 
 def main() -> None:
@@ -79,8 +79,8 @@ def main() -> None:
         except ValueError as exc:
             return str(exc)
 
-        def infer(turns: list[dict[str, str]], base_only: bool = False) -> str:
-            prompt = render(tokenizer, turns, True)
+        def infer(turns: list[dict[str, str]], base_only: bool = False, prefix: str = "") -> str:
+            prompt = render(tokenizer, turns, True) + prefix
             inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=2048)
             inputs = {key: value.to(model.device) for key, value in inputs.items()}
             adapter_context = model.disable_adapter() if base_only and args.adapter else nullcontext()
@@ -91,17 +91,21 @@ def main() -> None:
                     do_sample=False,
                     pad_token_id=tokenizer.eos_token_id,
                 )
-            return tokenizer.decode(output[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True)
+            return prefix + tokenizer.decode(output[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True)
 
-        answer = infer(conversation)
+        # The existing dialogue LoRA learned Korean turn continuation, not English explanations.
+        base_for_english = bool(args.adapter and language == "en" and enforce_style)
+        answer = infer(conversation, base_only=base_for_english)
+        if language == "en" and enforce_style:
+            answer = normalize_pronunciation(answer, task, expression)
         if language == "en" and enforce_style and english_issues(answer, task):
             corrected = [dict(turn) for turn in conversation]
             corrected[-1]["content"] += (
                 "\nFinal check: Write every explanation in English. Include every required English section "
-                "with a complete sentence. Put the short Korean expression in Hangul followed "
-                "immediately by Latin-letter pronunciation in parentheses. Do not write Korean prose."
+                "with a complete English sentence. Do not write Korean prose."
             )
-            answer = infer(corrected, base_only=bool(args.adapter))
+            prefix = HEADINGS[task][0] + "\n" if task in HEADINGS else ""
+            answer = normalize_pronunciation(infer(corrected, base_only=base_for_english, prefix=prefix), task, expression)
             if english_issues(answer, task):
                 return "I could not produce a reliable English answer. Please try again with more context."
         answer = remove_inline_citations(answer)
