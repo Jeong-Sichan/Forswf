@@ -152,10 +152,23 @@ def evidence_for_prompt(chunks: list[dict]) -> list[dict]:
     return [{key: row[key] for key in ("source_id", "title", "url", "license", "text")} for row in chunks]
 
 
+def guide_source_matches(question: str, row: dict) -> bool:
+    """Screen obvious off-topic Easy Law hits for Korean student questions.
+
+    English cross-language matches still need manual review of the retrieved text.
+    """
+    if not row.get("source_id", "").startswith("easylaw:") or not re.search(r"[가-힣]", question):
+        return True
+    title_parts = row["title"].split("·")
+    topic = title_parts[1].strip() if len(title_parts) >= 3 else row["title"]
+    return len(set(terms(question)) & set(terms(topic))) >= 2
+
+
 def source_footer(chunks: list[dict]) -> str:
     if not chunks:
         return ""
     lines = ["\n\nSources / 출처 (retrieved passages):"]
     for number, row in enumerate(chunks, 1):
-        lines.append(f"[{number}] [{row['title']}]({row['url']}) · {row['license']}")
+        date = f" · 자료 날짜: {row['updated_at']}" if row.get("updated_at") else ""
+        lines.append(f"[{number}] [{row['title']}]({row['url']}) · {row['license']}{date}")
     return "\n".join(lines)
