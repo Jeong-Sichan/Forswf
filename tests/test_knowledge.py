@@ -44,6 +44,7 @@ class KnowledgeTests(unittest.TestCase):
             if params.get("meta") == "siteinfo":
                 return {"query": {"rightsinfo": {"text": "CC BY-SA", "url": "https://example.org/license"}}}
             self.assertEqual(params["exlimit"], 10)
+            self.assertEqual(params["redirects"], 1)
             return {"query": {"pages": [{"pageid": 7, "title": "Korean culture", "fullurl": "https://example.org/page", "extract": self.doc["text"], "revisions": [{"revid": 12, "timestamp": "2026-01-01T00:00:00Z"}]}]}}
 
         def limited_api(_language, params):
@@ -76,6 +77,17 @@ class KnowledgeTests(unittest.TestCase):
 
         with patch.object(collect_wikimedia, "api", side_effect=fake_category_api), patch.object(collect_wikimedia.time, "sleep"):
             self.assertEqual(collect_wikimedia.category_titles("en", ["Category:Test"], 3), ["One", "Two", "Three"])
+
+    def test_redirected_titles_are_deduplicated(self):
+        def fake_api(_language, params):
+            if params.get("meta") == "siteinfo":
+                return {"query": {"rightsinfo": {"text": "CC BY-SA", "url": "https://example.org/license"}}}
+            self.assertEqual(params["redirects"], 1)
+            return {"query": {"pages": [{"pageid": 17, "title": "Korean New Year", "fullurl": "https://example.org/17", "extract": self.doc["text"], "revisions": [{"revid": 18}]}]}}
+
+        with tempfile.TemporaryDirectory() as directory, patch.object(collect_wikimedia, "api", side_effect=fake_api):
+            collect_wikimedia.collect("en", ["Seollal", "Korean New Year"], Path(directory))
+            self.assertEqual(len((Path(directory) / "documents.jsonl").read_text().splitlines()), 1)
 
 
 if __name__ == "__main__":

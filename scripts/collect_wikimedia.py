@@ -51,11 +51,11 @@ def collect(language: str, titles: list[str], output: Path) -> None:
     if not rights.get("url") or not rights.get("text"):
         raise ValueError("site license was not returned")
     license_name = rights["text"] + " (" + rights["url"] + ")"
-    records = []
+    records = {}
     for offset in range(0, len(titles), 10):
         params = {
             "action": "query", "prop": "extracts|info|revisions", "explaintext": 1,
-            "exlimit": 10, "inprop": "url", "rvprop": "timestamp|ids",
+            "exlimit": 10, "redirects": 1, "inprop": "url", "rvprop": "timestamp|ids",
             "titles": "|".join(titles[offset:offset + 10]),
         }
         result = api(language, params)
@@ -64,21 +64,27 @@ def collect(language: str, titles: list[str], output: Path) -> None:
                 # A single-page retry also handles servers that cap multi-page extracts.
                 single = api(language, dict(params, titles=page["title"], exlimit=1))
                 page = single["query"]["pages"][0]
-            if page.get("missing") or not page.get("extract", "").strip() or not page.get("fullurl"):
-                print("skipped:", page.get("title"))
+            if page.get("missing") or not page.get("pageid"):
+                print("skipped (page missing):", page.get("title"))
+                continue
+            if not page.get("extract", "").strip():
+                print("skipped (no text extract):", page.get("title"))
+                continue
+            if not page.get("fullurl"):
+                print("skipped (no source URL):", page.get("title"))
                 continue
             revision = page.get("revisions", [{}])[0]
-            records.append({
+            records[page["pageid"]] = {
                 "source_id": f"wikipedia:{language}:{page['pageid']}:{revision.get('revid', '')}",
                 "title": page["title"], "url": page["fullurl"], "license": license_name,
                 "language": language, "updated_at": revision.get("timestamp", ""),
                 "text": page["extract"],
-            })
+            }
         time.sleep(0.2)
     output.mkdir(parents=True, exist_ok=True)
     document_file = output / "documents.jsonl"
     with document_file.open("w", encoding="utf-8") as handle:
-        for record in records:
+        for record in records.values():
             handle.write(json.dumps(record, ensure_ascii=False) + "\n")
     with tarfile.open(output / "knowledge.tar.gz", "w:gz") as archive:
         archive.add(document_file, arcname="documents.jsonl")
