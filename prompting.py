@@ -98,6 +98,30 @@ def messages(expression: str, situation: str, relationship: str, language: str =
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
+def guide_messages(question: str, situation: str, language: str, evidence: list[dict]) -> list[dict[str, str]]:
+    """Ask a student-life question using retrieved, dated official passages."""
+    if language not in {"ko", "en"} or not question.strip() or not evidence:
+        raise ValueError("Guide questions need a language, question, and retrieved passages")
+    language_rule = "Answer in clear English." if language == "en" else "쉬운 한국어로 답하세요."
+    system = (
+        "You help international students with life in Korea. Answer only from the supplied passages. "
+        "Cite each supported claim with [1] or [2]. If the passages do not answer the question, "
+        "say so and suggest checking the linked official source. Do not invent procedures, fees, "
+        "deadlines, eligibility, or cultural rules. State that procedures may have changed since "
+        "the source's reference date. " + language_rule
+    )
+    excerpts = []
+    for number, row in enumerate(evidence[:3], 1):
+        if any(not isinstance(row.get(key), str) or not row[key].strip() for key in ("title", "url", "text")):
+            raise ValueError("Guide passages need title, URL, and text")
+        excerpts.append(
+            f"[{number}] {row['title']}\nReference date: {row.get('updated_at') or 'not shown'}\n"
+            f"URL: {row['url']}\nExcerpt: {row['text'][:900]}"
+        )
+    user = f"Question: {question.strip()}\nSituation: {situation.strip() or 'not specified'}\n\n" + "\n\n".join(excerpts)
+    return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+
+
 def render(tokenizer, conversation: list[dict[str, str]], generation: bool) -> str:
     if tokenizer.chat_template:
         return tokenizer.apply_chat_template(

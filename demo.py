@@ -2,7 +2,7 @@
 
 import argparse
 
-from prompting import messages, render, require_pinned_revision
+from prompting import guide_messages, messages, render, require_pinned_revision
 from kormo_compat import fix_causal_mask_keyword
 
 
@@ -15,6 +15,7 @@ def main() -> None:
     parser.add_argument("--retriever", choices=("e5", "bm25"), default="e5")
     parser.add_argument("--smoke", action="store_true", help="Generate one answer and exit without a web server")
     parser.add_argument("--smoke-suite", action="store_true", help="Test English, Korean, and an English question in one load")
+    parser.add_argument("--smoke-student", action="store_true", help="Test a sourced student-life question")
     parser.add_argument("--share", action="store_true", help="Create a temporary Gradio link")
     args = parser.parse_args()
     require_pinned_revision(args.revision)
@@ -53,7 +54,9 @@ def main() -> None:
 
     def explain(expression: str, situation: str, relationship: str, language: str, task: str) -> str:
         try:
-            found = index.search(expression + " " + situation, limit=2) if index else None
+            if task == "guide" and index is None:
+                return "Student-life questions need a knowledge index. / 유학생 생활 질문에는 지식 자료가 필요합니다."
+            found = index.search(expression + " " + situation, limit=1 if task == "guide" else 2) if index else None
             if index and not found:
                 return "I could not find a relevant source. Please add context or check another source. / 관련 출처를 찾지 못했습니다. 상황을 더 알려주세요."
             if found is not None:
@@ -62,7 +65,9 @@ def main() -> None:
                 evidence = evidence_for_prompt(found)
             else:
                 evidence = None
-            prompt = render(tokenizer, messages(expression, situation, relationship, language, task, evidence), True)
+            conversation = (guide_messages(expression, situation, language, found)
+                            if task == "guide" else messages(expression, situation, relationship, language, task, evidence))
+            prompt = render(tokenizer, conversation, True)
         except ValueError as exc:
             return str(exc)
         inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=2048)
@@ -96,9 +101,13 @@ def main() -> None:
             print(explain(expression, situation, relationship, language, task), flush=True)
         return
 
+    if args.smoke_student:
+        print(explain("외국인등록은 어디서 신청하나요?", "한국에 온 유학생", "", "ko", "guide"))
+        return
+
     with gr.Blocks(title="말맥 | 한국어 맥락 해설기") as ui:
         gr.Markdown("# 말맥 | Malmaek\nUnderstand Korean expressions in context. 한국어 표현을 상황에 맞게 설명합니다. AI answers may be wrong. Retrieved passages are shown for checking; their presence does not verify every claim in the answer.")
-        task = gr.Radio(choices=[("Explain a phrase / 표현 해설", "explain"), ("Ask a question / 질문하기", "ask")], value="explain", label="Task / 기능")
+        task = gr.Radio(choices=[("Explain a phrase / 표현 해설", "explain"), ("Ask a Korean phrase / 표현 질문", "ask"), ("Student life / 유학생 생활", "guide")], value="explain", label="Task / 기능")
         expression = gr.Textbox(label="Korean expression or question / 표현 또는 질문", placeholder="생각해 볼게요")
         situation = gr.Textbox(label="Situation / 상황", placeholder="A reply after inviting a friend to a weekend meetup")
         relationship = gr.Textbox(label="Relationship / 상대와의 관계", placeholder="Friends")

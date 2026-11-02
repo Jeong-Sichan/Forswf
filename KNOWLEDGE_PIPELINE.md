@@ -2,7 +2,36 @@
 
 이 코드는 **수집 도구와 학습 도구**다. 현재 저장소에는 수백 건의 검증된 문화 문서나 검수 완료 QLoRA 학습셋이 들어 있지 않다. 문서 수, 검색 품질, QLoRA 성능은 Seraph에서 실제 수집·평가한 뒤에만 발표한다.
 
-현재 자동 수집기는 위키백과의 **임시 출처**만 다룬다. 최종 서비스의 우선 자료는 [공식 자료 도입 순서](KNOWLEDGE_PLAN.md#공식-자료-도입-순서)에 따라 한국어기초사전, 관련 관광·문화 공공데이터다. 모두의 말뭉치는 검수할 대화 사례를 찾는 데 사용한다. 각 자료의 실제 이용 조건을 확인하기 전에는 학습이나 공개 재배포에 넣지 않는다.
+현재 자동 수집기는 법제처의 유학생 생활법령 안내와 위키백과의 **임시 문화 출처**를 다룬다. 다른 공식 자료는 [공식 자료 도입 순서](KNOWLEDGE_PLAN.md#공식-자료-도입-순서)에 따라 추가한다. 모두의 말뭉치는 검수할 대화 사례를 찾는 데 사용한다. 각 자료의 실제 이용 조건을 확인하기 전에는 학습이나 공개 재배포에 넣지 않는다.
+
+## 공식 유학생 생활 안내 RAG 첫 실행
+
+법제처 [찾기쉬운 생활법령정보의 외국인유학생 안내](https://www.easylaw.go.kr/CSP/CsmMain.laf?csmSeq=2853)는 외국인등록·주거·은행·보험·시간제 취업 등 16개 본문 항목을 제공한다. [저작권정책](https://www.easylaw.go.kr/CSP/AboutCopyright.laf?topMenu=introUl3)은 생활법령정보의 출처를 표시한 활용을 허용하지만 제3자 저작물은 별도 조건을 따른다. 수집기는 원문에 `출처:` 표기가 있는 8개 항목을 `attribution_review.jsonl`로 분리하고, 나머지 8개만 RAG 압축 파일에 넣는다. 각 항목의 원문 URL과 표시된 기준일을 보존한다. 이 선별은 제3자 권리에 대한 최종 법률 검토를 대신하지 않는다.
+
+`srun`으로 받은 **계산 노드**에서 아래를 실행한다. `git pull`은 이 변경이 원격 브랜치에 반영된 뒤 실행한다. 원본 압축 파일은 `/data`, 검색용 청크는 `/local_datasets`에 둔다.
+
+```bash
+cd /data/$USER/repos/swf/Forswf
+git pull --ff-only
+source /data/$USER/envs/malmaek/bin/activate
+python -m scripts.collect_easylaw_students \
+  --output /data/$USER/datasets/malmaek-easylaw-students
+
+local_law=/local_datasets/$USER/malmaek-easylaw-${SLURM_JOB_ID:-manual}
+bash scripts/stage_knowledge.sh \
+  /data/$USER/datasets/malmaek-easylaw-students/knowledge.tar.gz "$local_law"
+python -m scripts.query_knowledge --knowledge "$local_law/chunks.jsonl" \
+  --query '외국인등록증 신청' --retriever bm25
+python -m scripts.query_knowledge --knowledge "$local_law/chunks.jsonl" \
+  --query '유학생 건강보험 가입' --retriever bm25
+
+export HF_HOME=/data/$USER/models/malmaek/hf-cache
+export KORMO_REVISION=547fa40eeb8c69d3c5e278daf906d315c4f8e7ea
+python demo.py --revision "$KORMO_REVISION" \
+  --knowledge "$local_law/chunks.jsonl" --retriever bm25 --smoke-student
+```
+
+`--smoke-student`는 공식 발췌를 넣은 **유학생 생활 질문**을 한 번 생성한다. 답변의 모든 사실과 `[1]` 인용이 검색 발췌에 실제로 있는지 사람이 확인한다. 이 법령 자료는 말투·식당 예절의 근거가 아니다. 최신 절차는 화면의 기준일과 하이코리아 등 현재 담당기관 안내를 다시 확인한다. 영어 질문에는 기본 E5 검색기를 사용해 교차 언어 검색을 별도로 시험한다.
 
 한국어기초사전의 `사전 검색` API에 대해서는 사용자 제공 공식 안내 화면에서 `https://krdict.korean.go.kr/api/search`, `key`·`q`·`start` 요청 변수 및 XML의 `target_code`·`word`·`sup_no`·`example`·`link` 필드를 확인했다. 이를 읽는 [검색 후보 수집기](scripts/collect_krdict.py)가 있다. 이 응답에는 **뜻풀이가 없으므로** 아직 검색 지식 문서로 합치지 않는다. `사전 내용` API 응답과 뜻풀이·용례 이용 조건을 확인한 뒤에만 본문 수집과 RAG 색인을 추가한다.
 
