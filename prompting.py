@@ -70,7 +70,7 @@ def messages(expression: str, situation: str, relationship: str, language: str =
     system = SYSTEM + "\n" + TASK_RULES[task] + "\n" + LANGUAGE_RULES[language][task]
     user = f"{label}: {expression}\n상황: {situation}\n상대와의 관계: {relationship}\n답변 언어: {language}"
     if evidence is not None:
-        system += "\nUse the supplied excerpts for factual cultural claims. Cite the excerpt number, e.g. [1]. If they do not support an answer, say what remains unknown. A source about a general custom does not establish what a particular person intended."
+        system += "\nSTRICT SOURCE RULES: Use the supplied excerpts only for factual claims about Korean culture or customs. Add an inline citation such as [1] to every factual claim supported by an excerpt. Do not cite a passage that does not support the claim. If the excerpts do not establish a detail, say so plainly instead of guessing. Never invent locations, restaurant layouts, regional differences, venue types, motives, or gestures. Keep the direct meaning of the user's phrase separate from facts in the excerpts. A general article does not establish what a particular person or business intends or does."
         if evidence:
             excerpts = []
             for index, item in enumerate(evidence[:3], 1):

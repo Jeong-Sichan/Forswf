@@ -67,7 +67,7 @@ def main() -> None:
         for case_number, row in enumerate(rows, 1):
             from knowledge import evidence_for_prompt
 
-            found = retrieval_index.search(row["expression"] + " " + row["situation"]) if retrieval_index else None
+            found = retrieval_index.search(row["expression"] + " " + row["situation"], limit=2) if retrieval_index else None
             evidence = evidence_for_prompt(found) if found is not None else row.get("evidence")
             with model.disable_adapter():
                 baseline = generate(row)
