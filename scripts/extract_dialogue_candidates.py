@@ -6,6 +6,7 @@ source corpus unpacked under /local_datasets.
 """
 
 import argparse
+import hashlib
 import json
 import random
 import re
@@ -68,12 +69,17 @@ def extract(input_dir: Path, output: Path, max_cases: int, size: int, stride: in
     for path in files:
         with path.open(encoding="utf-8-sig") as handle:
             document = json.load(handle)
+        multisession = document.get("multisessionInfo", {}) if isinstance(document, dict) else {}
+        group_value = multisession.get("multisessionID") if isinstance(multisession, dict) else None
+        group_value = str(group_value or path.relative_to(input_dir))
+        group_id = hashlib.sha256(group_value.encode()).hexdigest()[:20]
         for conversation in conversations(document):
             found_conversations += 1
             for window in windows(conversation, size, stride):
                 found_windows += 1
                 record = {
                     "source_file": str(path.relative_to(input_dir)),
+                    "session_group": group_id,
                     "conversation_number": found_conversations,
                     "turns": window,
                     "reviewed": False,
