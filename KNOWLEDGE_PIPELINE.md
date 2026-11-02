@@ -79,6 +79,16 @@ python -m scripts.prepare_review_queue \
 
 이 CSV의 64개 사례는 **모두 미검수 초안**이다. 위키백과의 유사도 검색 결과는 대화 표현의 근거가 아니어서 자동으로 붙이지 않는다. 검수자는 한국어 뜻·맥락·행동 제안·불확실성을 확인하고 영어·쉬운 한국어 답안을 작성한다. 특정 문화 사실을 주장하는 경우 실제로 그 주장을 뒷받침하는 자료를 별도로 찾아 출처 칸에 넣는다. 출처가 없으면 문화적 관습을 단정하지 않는다.
 
+영어 네 칸이 빈 56건은 [KoRMo 영어 초안 도구](scripts/draft_english_answers.py)로 별도 CSV에 채울 수 있다. 생성 문장은 `model_output_draft`에도 남고, `reviewed`는 `NO`로 유지된다. 문맥을 잘못 해석하거나 한국어가 섞인 답은 사람이 고친다. 이 도구는 검색 자료를 답의 출처로 자동 붙이지 않는다.
+
+```bash
+export HF_HOME=/data/$USER/models/malmaek/hf-cache
+python -m scripts.draft_english_answers \
+  --input /data/$USER/datasets/malmaek-review-64-clean.csv \
+  --output /data/$USER/datasets/malmaek-review-64-en-draft.csv \
+  --revision 547fa40eeb8c69d3c5e278daf906d315c4f8e7ea
+```
+
 CSV에서 `source_supports_claim`은 실제로 뒷받침할 때만 `YES`, 아니면 `NO`로 적는다. 근거가 있는 답에는 해당 문장에 `[1]`을 붙이고, 근거가 없으면 인용하지 않는다. 한국어 답 네 칸과 영어 답 네 칸을 읽고 수정한다. `reviewer`를 채운 뒤 `reviewed=YES`로 바꾼다. [내보내기 도구](scripts/export_reviewed.py)는 검수 완료 행만 받아 같은 상황의 영어·한국어를 같은 학습/평가 분할에 둔다. 영어 네 칸이 비어 있으면 한국어 행만 내보내므로, 최종 영어 중심 학습에는 `--require-bilingual`을 사용한다.
 
 ```bash
