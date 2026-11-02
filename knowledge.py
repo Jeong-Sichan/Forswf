@@ -167,8 +167,8 @@ def guide_source_matches(question: str, row: dict) -> bool:
 def source_footer(chunks: list[dict]) -> str:
     if not chunks:
         return ""
-    lines = ["\n\nSources / 출처 (retrieved passages):"]
-    for number, row in enumerate(chunks, 1):
+    lines = ["\n\nSources / 자료 출처:"]
+    for row in chunks:
         date = f" · 자료 날짜: {row['updated_at']}" if row.get("updated_at") else ""
-        lines.append(f"[{number}] [{row['title']}]({row['url']}) · {row['license']}{date}")
+        lines.append(f"[{row['title']}]({row['url']}) · {row['license']}{date}")
     return "\n".join(lines)

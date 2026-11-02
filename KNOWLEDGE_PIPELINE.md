@@ -31,7 +31,7 @@ python demo.py --revision "$KORMO_REVISION" \
   --knowledge "$local_law/chunks.jsonl" --retriever bm25 --smoke-student
 ```
 
-`--smoke-student`는 공식 발췌를 넣은 **유학생 생활 질문**을 한 번 생성한다. 답변의 모든 사실과 `[1]` 인용이 검색 발췌에 실제로 있는지 사람이 확인한다. 이 법령 자료는 말투·식당 예절의 근거가 아니다. 한국어 생활 질문에서 검색 문서 제목의 주제어가 맞지 않으면 출처가 없다고 안내한다. 영어 질문에는 기본 E5 검색기를 사용해 교차 언어 검색을 별도로 시험하되, 무관한 문서가 반환되는지 직접 검토한다. 최신 절차는 화면의 기준일과 하이코리아 등 현재 담당기관 안내를 다시 확인한다.
+`--smoke-student`는 공식 발췌를 넣은 **유학생 생활 질문**을 한 번 생성한다. 답변의 모든 사실이 검색 발췌에 실제로 있는지 사람이 확인한다. 본문에 `[1]` 같은 번호를 넣지 않지만, 법제처의 이용 조건에 따라 출처 링크는 답변 아래에 표시한다. 이 법령 자료는 말투·식당 예절의 근거가 아니다. 한국어 생활 질문에서 검색 문서 제목의 주제어가 맞지 않으면 출처가 없다고 안내한다. 영어 질문에는 기본 E5 검색기를 사용해 교차 언어 검색을 별도로 시험하되, 무관한 문서가 반환되는지 직접 검토한다. 최신 절차는 화면의 기준일과 하이코리아 등 현재 담당기관 안내를 다시 확인한다.
 
 AI Hub 대화 어댑터 학습을 마치면 `--compare-adapter`로 기본 KoRMo와 같은 모델에 어댑터를 붙인 KoRMo를 한 번의 모델 로딩으로 비교한다. 표현·인사 3건은 자료 없이 비교하고, `--knowledge`가 있으면 외국인등록 질문도 동일한 검색 발췌로 비교한다. 이 비교는 수동 진단이며 대화 이어 말하기 평가 손실만으로 문화·생활 답변의 개선을 주장하지 않는다.
 
@@ -43,6 +43,14 @@ export KORMO_REVISION=547fa40eeb8c69d3c5e278daf906d315c4f8e7ea
 python demo.py --revision "$KORMO_REVISION" \
   --adapter /data/$USER/models/malmaek/dialogue-adapter-<job-id> \
   --compare-adapter
+```
+
+`--compare-adapter`는 학습 효과를 보려고 **원시 출력**을 보여준다. 앱과 `--smoke-suite`는 영어 답변의 네 항목, 한국어 표현과 로마자 발음을 확인한다. 기존 대화 어댑터가 형식을 놓치면 기본 KoRMo로 다시 생성한다. 이는 기존 어댑터를 영어 문화 설명용으로 재학습한 것이 아니다. 해당 용도의 다음 QLoRA에는 영어 답변을 검수하고 발음을 붙인 지도 사례를 사용한다.
+
+```bash
+python demo.py --revision "$KORMO_REVISION" \
+  --adapter /data/$USER/models/malmaek/dialogue-adapter-<job-id> \
+  --smoke-suite
 ```
 
 한국어기초사전의 `사전 검색` API에 대해서는 사용자 제공 공식 안내 화면에서 `https://krdict.korean.go.kr/api/search`, `key`·`q`·`start` 요청 변수 및 XML의 `target_code`·`word`·`sup_no`·`example`·`link` 필드를 확인했다. 이를 읽는 [검색 후보 수집기](scripts/collect_krdict.py)가 있다. 이 응답에는 **뜻풀이가 없으므로** 아직 검색 지식 문서로 합치지 않는다. `사전 내용` API 응답과 뜻풀이·용례 이용 조건을 확인한 뒤에만 본문 수집과 RAG 색인을 추가한다.
@@ -109,7 +117,7 @@ python -m scripts.query_knowledge --knowledge "$local_knowledge/chunks.jsonl" \
 python demo.py --revision "$KORMO_REVISION" --knowledge "$local_knowledge/chunks.jsonl"
 ```
 
-앱은 가져온 발췌를 KoRMo 입력에 붙이고, 답변 아래에 검색한 문서의 URL과 라이선스를 표시한다. 답변 속 `[1]` 같은 인용과 실제 문서 내용이 일치하는지는 아직 자동 검증하지 않는다. 무관한 문서가 검색되거나 근거 없이 답을 단정하는 실패 사례도 기록한다. 검색 결과가 없으면 출처를 꾸미지 않고 답을 보류한다.
+앱은 가져온 발췌를 KoRMo 입력에 붙이고, 답변 아래에 검색한 문서의 URL과 라이선스를 표시한다. 답변의 주장과 실제 문서 내용이 일치하는지는 아직 자동 검증하지 않는다. 무관한 문서가 검색되거나 근거 없이 답을 단정하는 실패 사례도 기록한다. 검색 결과가 없으면 출처를 꾸미지 않고 답을 보류한다.
 
 ## 4. QLoRA용 검수 자료
 
@@ -141,7 +149,7 @@ python -m scripts.draft_english_answers \
   --revision 547fa40eeb8c69d3c5e278daf906d315c4f8e7ea
 ```
 
-CSV에서 `source_supports_claim`은 실제로 뒷받침할 때만 `YES`, 아니면 `NO`로 적는다. 근거가 있는 답에는 해당 문장에 `[1]`을 붙이고, 근거가 없으면 인용하지 않는다. 한국어 답 네 칸과 영어 답 네 칸을 읽고 수정한다. `reviewer`를 채운 뒤 `reviewed=YES`로 바꾼다. [내보내기 도구](scripts/export_reviewed.py)는 검수 완료 행만 받아 같은 상황의 영어·한국어를 같은 학습/평가 분할에 둔다. 영어 네 칸이 비어 있으면 한국어 행만 내보내므로, 최종 영어 중심 학습에는 `--require-bilingual`을 사용한다.
+CSV에서 `source_supports_claim`은 실제로 뒷받침할 때만 `YES`, 아니면 `NO`로 적는다. 근거는 `evidence`에 보존하고 답변 본문에는 `[1]`을 붙이지 않는다. 영어 답은 쉬운 영어로 작성하되 한국어 표현을 보여줄 때 한글 뒤에 로마자 발음을 적는다. 한국어 답 네 칸과 영어 답 네 칸을 읽고 수정한다. `reviewer`를 채운 뒤 `reviewed=YES`로 바꾼다. [내보내기 도구](scripts/export_reviewed.py)는 검수 완료 행만 받아 같은 상황의 영어·한국어를 같은 학습/평가 분할에 둔다. 영어 네 칸이 비어 있으면 한국어 행만 내보내므로, 최종 영어 중심 학습에는 `--require-bilingual`을 사용한다.
 
 ```bash
 python -m scripts.export_reviewed \
@@ -161,7 +169,7 @@ Python으로 사례를 편집하려면 `prepare_dataset.py`의 `TRAIN`·`EVAL`�
     "situation": "First meeting at university",
     "relationship": "Student and professor",
     "language": "en",
-    "answer": "... [1] ...",
+    "answer": "...",
     "evidence": [{
         "source_id": "wikipedia:en:...",
         "title": "...",
@@ -181,7 +189,7 @@ python prepare_dataset.py --output-dir ./prepared-data
 cp ./prepared-data/malmaek.tar.gz /data/$USER/datasets/malmaek-reviewed.tar.gz
 ```
 
-긴 학습은 Slurm 배치 노드에서 지식 문서와 학습 자료를 **같은 계산 노드**에 스테이징하도록 두 압축 파일을 전달한다. `MALMAEK_REQUIRE_EVIDENCE=1`이면 모든 학습/평가 사례의 검수 표시·근거 필드와 인용 번호를 확인한다.
+긴 학습은 Slurm 배치 노드에서 지식 문서와 학습 자료를 **같은 계산 노드**에 스테이징하도록 두 압축 파일을 전달한다. `MALMAEK_REQUIRE_EVIDENCE=1`이면 모든 학습/평가 사례의 검수 표시·근거 필드를 확인하고 답변 본문의 인용 번호를 금지한다.
 
 ```bash
 mkdir -p logs
@@ -200,4 +208,4 @@ python -m scripts.make_blind_eval \
   --key outputs/condition-key-<job-id>.csv
 ```
 
-채점자에게는 `scoring` CSV만 주고 `condition-key`는 채점이 끝난 뒤 연다. 각 항목 0~2점을 쓰고, 검색 출처의 원문과 모델 인용이 맞는지 확인한다.
+채점자에게는 `scoring` CSV만 주고 `condition-key`는 채점이 끝난 뒤 연다. 각 항목 0~2점을 쓰고, 검색 출처의 원문과 답변 주장이 맞는지 확인한다.

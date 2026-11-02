@@ -1,9 +1,11 @@
 """Run on a machine with a KoRMo-compatible GPU and installed dependencies."""
 
 import argparse
+from contextlib import nullcontext
 
 from prompting import guide_messages, messages, render, require_pinned_revision
 from kormo_compat import fix_causal_mask_keyword
+from output_style import english_issues, remove_inline_citations
 
 
 def main() -> None:
@@ -56,7 +58,7 @@ def main() -> None:
     model.eval()
 
     def generate_answer(expression: str, situation: str, relationship: str, language: str, task: str,
-                        use_knowledge: bool) -> str:
+                        use_knowledge: bool, enforce_style: bool = True) -> str:
         try:
             active_index = index if use_knowledge else None
             if task == "guide" and active_index is None:
@@ -74,19 +76,35 @@ def main() -> None:
                 evidence = None
             conversation = (guide_messages(expression, situation, language, found)
                             if task == "guide" else messages(expression, situation, relationship, language, task, evidence))
-            prompt = render(tokenizer, conversation, True)
         except ValueError as exc:
             return str(exc)
-        inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=2048)
-        inputs = {key: value.to(model.device) for key, value in inputs.items()}
-        with torch.inference_mode():
-            output = model.generate(
-                **inputs,
-                max_new_tokens=400,
-                do_sample=False,
-                pad_token_id=tokenizer.eos_token_id,
+
+        def infer(turns: list[dict[str, str]], base_only: bool = False) -> str:
+            prompt = render(tokenizer, turns, True)
+            inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=2048)
+            inputs = {key: value.to(model.device) for key, value in inputs.items()}
+            adapter_context = model.disable_adapter() if base_only and args.adapter else nullcontext()
+            with adapter_context, torch.inference_mode():
+                output = model.generate(
+                    **inputs,
+                    max_new_tokens=400,
+                    do_sample=False,
+                    pad_token_id=tokenizer.eos_token_id,
+                )
+            return tokenizer.decode(output[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True)
+
+        answer = infer(conversation)
+        if language == "en" and enforce_style and english_issues(answer, task):
+            corrected = [dict(turn) for turn in conversation]
+            corrected[-1]["content"] += (
+                "\nFinal check: Write every explanation in English. Include every required English section "
+                "with a complete sentence. Put the short Korean expression in Hangul followed "
+                "immediately by Latin-letter pronunciation in parentheses. Do not write Korean prose."
             )
-        answer = tokenizer.decode(output[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True)
+            answer = infer(corrected, base_only=bool(args.adapter))
+            if english_issues(answer, task):
+                return "I could not produce a reliable English answer. Please try again with more context."
+        answer = remove_inline_citations(answer)
         if found:
             from knowledge import source_footer
 
@@ -103,6 +121,7 @@ def main() -> None:
     if args.smoke_suite:
         checks = [
             ("English explanation", "반찬은 셀프입니다", "A sign on the wall of a restaurant", "Customer and restaurant", "en", "explain"),
+            ("English indirect reply", "생각해 볼게요", "A friend replies after a weekend invitation", "Friends", "en", "explain"),
             ("Korean explanation", "반찬은 셀프입니다", "식당 벽의 안내문", "손님과 식당", "ko", "explain"),
             ("English question", "How should I greet an older adult in Korea?", "Meeting someone for the first time", "A younger adult and an older adult", "en", "ask"),
         ]
@@ -126,8 +145,8 @@ def main() -> None:
         for label, expression, situation, relationship, language, task in checks:
             print(f"\n=== {label} ===", flush=True)
             with model.disable_adapter():
-                print("--- Base KoRMo ---\n" + generate_answer(expression, situation, relationship, language, task, task == "guide"), flush=True)
-            print("--- KoRMo + dialogue LoRA ---\n" + generate_answer(expression, situation, relationship, language, task, task == "guide"), flush=True)
+                print("--- Base KoRMo ---\n" + generate_answer(expression, situation, relationship, language, task, task == "guide", False), flush=True)
+            print("--- KoRMo + dialogue LoRA ---\n" + generate_answer(expression, situation, relationship, language, task, task == "guide", False), flush=True)
         return
 
     with gr.Blocks(title="말맥 | 한국어 맥락 해설기") as ui:

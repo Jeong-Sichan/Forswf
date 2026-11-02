@@ -15,7 +15,9 @@ SYSTEM_EN = """You explain Korean expressions and everyday situations to newcome
 Use only the user's phrase, situation, relationship, and supplied excerpts. Do not claim to know
 another person's intention or invent details about a restaurant, place, region, or custom.
 If context is missing, say what is unknown and suggest one practical question or action.
-Do not guess medical, legal, or institutional rules."""
+Do not guess medical, legal, or institutional rules. Write the explanation in English.
+Korean is allowed only for short expressions you are teaching; immediately follow each one
+with a readable Latin-letter pronunciation in parentheses. Never write Korean prose or headings."""
 
 TASK_RULES = {
     "explain": "주어진 한국어 표현을 해당 상황에 맞춰 해설하세요. 뜻이 여러 가지일 수 있으면 구분하세요.",
@@ -23,21 +25,21 @@ TASK_RULES = {
 }
 
 TASK_RULES_EN = {
-    "explain": "Explain the Korean phrase in the stated situation. Separate its direct meaning from assumptions about the setting.",
-    "ask": "Suggest a Korean phrase in Hangul and explain when to use it. Consider the relationship and formality, not age alone.",
+    "explain": "Explain the Korean phrase in the stated situation. Separate its direct meaning from assumptions about the setting. A polite delay is not automatically a yes or a no.",
+    "ask": "Suggest a Korean phrase in Hangul followed by its Latin-letter pronunciation. Explain its use in English. Consider the relationship and formality, not age alone.",
 }
 
-SOURCE_RULES_EN = """Use excerpt numbers only for claims directly supported by those excerpts. Put a short citation such as [1] after the supported claim. A source about side dishes does not establish a restaurant's service layout. Do not add source-summary lines under the four headings. If no excerpt supports a cultural claim, leave it out or state that the sources do not establish it. Keep each section to one or two sentences."""
-SOURCE_RULES_KO = """발췌문이 직접 뒷받침하는 사실에만 [1]처럼 번호를 붙이세요. 반찬을 설명하는 자료만으로 식당의 실제 운영 방식이나 배치 장소를 단정할 수 없습니다. 네 항목 아래에 출처 요약을 별도 줄로 반복하지 마세요. 근거가 없는 문화적 주장이나 행동 세부사항은 빼거나 확인이 필요하다고 말하세요. 각 항목은 한두 문장으로 쓰세요."""
+SOURCE_RULES_EN = """Use supplied excerpts only for claims they directly support. Do not put bracket citation numbers in the answer; source links appear separately. A source about side dishes does not establish a restaurant's service layout. If no excerpt supports a cultural claim, leave it out or state what is unknown. Keep each section to one or two sentences."""
+SOURCE_RULES_KO = """제공된 발췌문이 직접 뒷받침하는 사실만 사용하세요. 본문에 [1] 같은 인용 번호를 쓰지 마세요. 자료의 출처 링크는 답변 아래에 별도로 표시됩니다. 반찬을 설명하는 자료만으로 식당의 실제 운영 방식이나 배치 장소를 단정할 수 없습니다. 각 항목은 한두 문장으로 쓰세요."""
 
 LANGUAGE_RULES = {
     "en": {
-        "explain": """Reply only in clear, simple English, except when quoting Korean expressions. Keep the Korean expression visible. Use exactly these four headings:
+        "explain": """Reply only in clear, simple English, except for the Korean expression followed by its pronunciation in Latin letters in parentheses. Use exactly these four English headings and fill every section:
 1. Plain meaning
 2. Meaning in this situation
 3. What to say or do
 4. What could change the meaning""",
-        "ask": """Reply only in clear, simple English, except when quoting Korean expressions. Use exactly these four headings:
+        "ask": """Reply only in clear, simple English, except for the suggested Korean phrase followed by its pronunciation in Latin letters in parentheses. Use exactly these four English headings and fill every section:
 1. Korean phrase
 2. When to use it
 3. What to say or do
@@ -82,7 +84,11 @@ def messages(expression: str, situation: str, relationship: str, language: str =
     relationship = relationship.strip()[:200] or "알 수 없음"
     label = "표현" if task == "explain" else "질문"
     system = (SYSTEM_EN + "\n" + TASK_RULES_EN[task]) if language == "en" else (SYSTEM + "\n" + TASK_RULES[task])
-    user = f"{label}: {expression}\n상황: {situation}\n상대와의 관계: {relationship}\n답변 언어: {language}"
+    if language == "en":
+        english_label = "Korean expression" if task == "explain" else "Question"
+        user = f"{english_label}: {expression}\nSituation: {situation}\nRelationship: {relationship}"
+    else:
+        user = f"{label}: {expression}\n상황: {situation}\n상대와의 관계: {relationship}\n답변 언어: {language}"
     if evidence is not None:
         system += "\n" + (SOURCE_RULES_EN if language == "en" else SOURCE_RULES_KO)
         if evidence:
@@ -93,8 +99,10 @@ def messages(expression: str, situation: str, relationship: str, language: str =
                 excerpts.append(f"[{index}] {item['title']}\nURL: {item['url']}\nExcerpt: {item['text'][:750]}")
             user += "\n\nSource excerpts / 출처 발췌:\n" + "\n\n".join(excerpts)
         else:
-            user += "\n\nSource excerpts / 출처 발췌: none found. Do not invent a citation."
+            user += "\n\nSource excerpts / 출처 발췌: none found. Do not invent source claims."
     system += "\n" + LANGUAGE_RULES[language][task]
+    if language == "en":
+        user += "\nFinal answer: English explanations only. Korean expressions must include Latin-letter pronunciation. Start with heading 1."
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
@@ -102,10 +110,11 @@ def guide_messages(question: str, situation: str, language: str, evidence: list[
     """Ask a student-life question using retrieved, dated official passages."""
     if language not in {"ko", "en"} or not question.strip() or not evidence:
         raise ValueError("Guide questions need a language, question, and retrieved passages")
-    language_rule = "Answer in clear English." if language == "en" else "쉬운 한국어로 답하세요."
+    language_rule = ("Answer in clear English; include Korean terms only when useful and add Latin-letter pronunciation."
+                     if language == "en" else "쉬운 한국어로 답하세요.")
     system = (
         "You help international students with life in Korea. Answer only from the supplied passages. "
-        "Cite each supported claim with [1] or [2]. If the passages do not answer the question, "
+        "Do not put bracket citation numbers in the answer; links appear separately. If the passages do not answer the question, "
         "say so and suggest checking the linked official source. Do not invent procedures, fees, "
         "deadlines, eligibility, or cultural rules. State that procedures may have changed since "
         "the source's reference date. " + language_rule

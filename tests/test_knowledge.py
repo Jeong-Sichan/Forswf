@@ -33,7 +33,7 @@ class KnowledgeTests(unittest.TestCase):
     def test_empty_evidence_requires_uncertainty(self):
         prompt = messages("반찬", "unknown", "unknown", evidence=[])
         self.assertIn("none found", prompt[1]["content"])
-        self.assertIn("Do not invent a citation", prompt[1]["content"])
+        self.assertIn("Do not invent source claims", prompt[1]["content"])
 
     def test_search_cannot_read_nas_data_directly(self):
         with self.assertRaises(ValueError):

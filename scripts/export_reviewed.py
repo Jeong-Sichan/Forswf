@@ -8,6 +8,8 @@ import random
 import tarfile
 from pathlib import Path
 
+from output_style import english_issues, remove_inline_citations
+
 
 FIELDS_KO = ("meaning_draft", "interpretation_draft", "response_draft", "uncertainty_draft")
 FIELDS_EN = ("english_meaning_draft", "english_interpretation_draft", "english_response_draft", "english_uncertainty_draft")
@@ -37,11 +39,14 @@ def convert(row: dict, language: str) -> dict:
             "title": row["candidate_source_title"].strip(), "url": url,
             "license": row["candidate_source_license"].strip(), "text": excerpt,
         }]
-        if not any("[1]" in part for part in parts):
-            raise ValueError(f"{row['id']}: 근거를 사용한 {language} 답변에 [1] 인용이 필요합니다")
     elif any("[1]" in part for part in parts):
         raise ValueError(f"{row['id']}: 출처가 부적합하면 {language} 답변의 [1] 인용을 지워 주세요")
+    parts = [remove_inline_citations(part) for part in parts]
     answer = "\n".join(f"{heading}\n{part}" for heading, part in zip(HEADINGS[language], parts))
+    if language == "en":
+        issues = english_issues(answer, "explain")
+        if issues:
+            raise ValueError(f"{row['id']}: 영어 답변 형식 검토 필요: {', '.join(issues)}")
     return {
         "task": "explain", "expression": row["expression"].strip(),
         "situation": row["situation"].strip(), "relationship": row["relationship"].strip(),
