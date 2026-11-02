@@ -4,6 +4,23 @@
 
 현재 자동 수집기는 위키백과의 **임시 출처**만 다룬다. 최종 서비스의 우선 자료는 [공식 자료 도입 순서](KNOWLEDGE_PLAN.md#공식-자료-도입-순서)에 따라 한국어기초사전, 관련 관광·문화 공공데이터다. 모두의 말뭉치는 검수할 대화 사례를 찾는 데 사용한다. 각 자료의 실제 이용 조건을 확인하기 전에는 학습이나 공개 재배포에 넣지 않는다.
 
+한국어기초사전의 `사전 검색` API에 대해서는 사용자 제공 공식 안내 화면에서 `https://krdict.korean.go.kr/api/search`, `key`·`q`·`start` 요청 변수 및 XML의 `target_code`·`word`·`sup_no`·`example`·`link` 필드를 확인했다. 이를 읽는 [검색 후보 수집기](scripts/collect_krdict.py)가 있다. 이 응답에는 **뜻풀이가 없으므로** 아직 검색 지식 문서로 합치지 않는다. `사전 내용` API 응답과 뜻풀이·용례 이용 조건을 확인한 뒤에만 본문 수집과 RAG 색인을 추가한다.
+
+발급받은 키를 명령줄 인자나 코드에 적지 말고, 할당받은 계산 노드의 셸에서 입력한다. 이미 캡처에 노출한 개인 키라면 먼저 재발급한다.
+
+```bash
+cd /data/$USER/repos/swf/Forswf
+git pull --ff-only
+source /data/$USER/envs/malmaek/bin/activate
+read -rsp '한국어기초사전 API 키: ' KRDICT_API_KEY; echo
+export KRDICT_API_KEY
+python -m scripts.collect_krdict --queries data/krdict_queries.txt \
+  --output /data/$USER/datasets/malmaek-krdict-search
+unset KRDICT_API_KEY
+```
+
+결과 `search_candidates.jsonl`은 표제어·용례·원문 링크를 담은 **미검수 후보**이며 모델 학습이나 앱 검색에는 자동으로 들어가지 않는다. API 키는 파일에 저장하지 않는다.
+
 ## 1. 계산 노드에서 공개 자료 수집
 
 로그인 노드에서는 Python, 압축 해제, 대량 데이터 검색을 하지 않는다. `srun`으로 할당받은 계산 노드에서 아래를 실행한다. 저장소는 `codex/malmaek-seraph` 브랜치로 맞춘다. 문서 원본과 KoRMo 모델은 `/data/$USER`에 두고, **검색·학습·평가에 실제로 읽는 데이터는 `/local_datasets/$USER`**에 둔다.
