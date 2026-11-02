@@ -20,16 +20,29 @@ def api(language: str, params: dict) -> dict:
 
 
 def category_titles(language: str, names: list[str], per_category: int) -> list[str]:
+    if per_category < 1:
+        raise ValueError("max-per-category must be positive")
     titles = []
     for name in names:
-        result = api(language, {
-            "action": "query", "list": "categorymembers", "cmtitle": name,
-            "cmtype": "page", "cmnamespace": 0, "cmlimit": per_category,
-        })
-        members = [item["title"] for item in result["query"]["categorymembers"]]
-        print(f"{name}: {len(members)} article titles")
-        titles.extend(members)
-        time.sleep(0.2)
+        collected = []
+        continuation = None
+        while len(collected) < per_category:
+            params = {
+                "action": "query", "list": "categorymembers", "cmtitle": name,
+                "cmtype": "page", "cmnamespace": 0,
+                "cmlimit": min(500, per_category - len(collected)),
+            }
+            if continuation:
+                params["cmcontinue"] = continuation
+            result = api(language, params)
+            members = [item["title"] for item in result["query"]["categorymembers"]]
+            collected.extend(members)
+            continuation = result.get("continue", {}).get("cmcontinue")
+            if not continuation or not members:
+                break
+            time.sleep(0.2)
+        print(f"{name}: {len(collected)} article titles")
+        titles.extend(collected)
     return titles
 
 
@@ -77,7 +90,7 @@ if __name__ == "__main__":
     parser.add_argument("--language", choices=("en", "ko"), default="en")
     parser.add_argument("--titles", type=Path, required=True, help="UTF-8 text, one page title per line")
     parser.add_argument("--categories", type=Path, help="Optional category names, one per line")
-    parser.add_argument("--max-per-category", type=int, default=60)
+    parser.add_argument("--max-per-category", type=int, default=150)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     titles = [line.strip() for line in args.titles.read_text(encoding="utf-8").splitlines() if line.strip() and not line.startswith("#")]

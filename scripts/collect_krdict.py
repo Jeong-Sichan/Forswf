@@ -76,6 +76,7 @@ def collect(queries: list[str], output: Path, key: str, max_results: int = 20) -
             start += len(page)
             time.sleep(0.2)
         print(f"{query}: total={total}, fetched through result {min(start + len(page) - 1, max_results)}")
+        time.sleep(0.2)
     output.mkdir(parents=True, exist_ok=True)
     target = output / "search_candidates.jsonl"
     with target.open("w", encoding="utf-8") as handle:

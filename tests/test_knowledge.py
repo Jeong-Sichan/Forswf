@@ -67,6 +67,16 @@ class KnowledgeTests(unittest.TestCase):
             collect_wikimedia.collect("en", ["Page 1", "Page 2"], Path(directory))
             self.assertEqual(len((Path(directory) / "documents.jsonl").read_text().splitlines()), 2)
 
+    def test_category_collection_follows_continuation(self):
+        def fake_category_api(_language, params):
+            if "cmcontinue" not in params:
+                return {"query": {"categorymembers": [{"title": "One"}, {"title": "Two"}]}, "continue": {"cmcontinue": "next"}}
+            self.assertEqual(params["cmcontinue"], "next")
+            return {"query": {"categorymembers": [{"title": "Three"}]}}
+
+        with patch.object(collect_wikimedia, "api", side_effect=fake_category_api), patch.object(collect_wikimedia.time, "sleep"):
+            self.assertEqual(collect_wikimedia.category_titles("en", ["Category:Test"], 3), ["One", "Two", "Three"])
+
 
 if __name__ == "__main__":
     unittest.main()

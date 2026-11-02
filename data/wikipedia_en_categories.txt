@@ -1,6 +1,4 @@
 # One-level category expansion; inspect collected titles and remove off-topic pages before use.
 Category:Korean cuisine
-Category:Korean culture
 Category:Korean language
 Category:Culture of South Korea
-Category:Holidays in South Korea
