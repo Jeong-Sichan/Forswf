@@ -5,7 +5,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-from knowledge import BM25Index, chunk_document, evidence_for_prompt, guide_source_matches, load_chunks, source_footer
+from knowledge import BM25Index, chunk_document, evidence_for_prompt, guide_source_matches, load_chunks, search_guide, source_footer
 from prompting import messages
 from scripts import collect_wikimedia
 
@@ -47,6 +47,22 @@ class KnowledgeTests(unittest.TestCase):
         }
         self.assertTrue(guide_source_matches("버스 교통카드 없이 타도 되나요?", passage))
         self.assertFalse(guide_source_matches("전세 보증금은 어떻게 하나요?", passage))
+
+    def test_english_lease_question_uses_contract_check_passage(self):
+        passage = {
+            "source_id": "easylaw:629:2.2.1", "title": "주택임대차 · 임대차계약의 당사자 확인 등 · 법제처",
+            "url": "https://example.org/lease", "license": "attribution",
+            "text": "계약 전 등기부상 소유자나 적법한 대리인인지 확인해야 합니다. " * 12,
+        }
+        student = {**passage, "source_id": "easylaw:2853:2.3.1", "title": "외국인유학생 · 외국인등록 및 변경신고 · 법제처",
+                   "text": "유학생은 외국인등록과 체류지 변경 신고를 해야 합니다. " * 12}
+        chunks = chunk_document(student) + chunk_document(passage)
+        index = BM25Index(chunks)
+        question = "What should I check before signing a housing lease in Korea?"
+        self.assertFalse(guide_source_matches(question, chunks[0]))
+        found = search_guide(index, question, "International student living in Korea")
+        self.assertEqual(found[0]["source_id"], passage["source_id"])
+        self.assertEqual(found[0]["chunk_id"], passage["source_id"] + ":0")
 
     def test_collector_keeps_license_revision_and_source_url(self):
         def fake_api(_language, params):

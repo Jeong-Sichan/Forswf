@@ -155,16 +155,42 @@ def evidence_for_prompt(chunks: list[dict]) -> list[dict]:
 def guide_source_matches(question: str, row: dict) -> bool:
     """Screen obvious off-topic Easy Law hits for Korean student questions.
 
-    English cross-language matches still need manual review of the retrieved text.
+    Route clearly named English topics to the matching official guide too.
     """
-    if not row.get("source_id", "").startswith("easylaw:") or not re.search(r"[가-힣]", question):
+    source_id = row.get("source_id", "")
+    if not source_id.startswith("easylaw:"):
         return True
-    if row["source_id"].startswith("easylaw:661:"):
+    english = question.lower()
+    if re.search(r"\b(lease|rental|renting|landlord|tenant|housing contract)\b", english):
+        return source_id.startswith("easylaw:629:")
+    if re.search(r"\b(bus|subway|transit|transportation|fare card)\b", english):
+        return source_id.startswith("easylaw:661:")
+    if not re.search(r"[가-힣]", question):
+        return True
+    if source_id.startswith("easylaw:661:"):
         transit_terms = ("버스", "지하철", "대중교통", "교통카드", "승차권", "부정승차")
         return any(term in question and term in row["text"] for term in transit_terms)
     title_parts = row["title"].split("·")
     topic = title_parts[1].strip() if len(title_parts) >= 3 else row["title"]
     return len(set(terms(question)) & set(terms(topic))) >= 2
+
+
+def search_guide(index, question: str, situation: str = "") -> list[dict]:
+    """Retrieve one relevant Easy Law passage without generic student context bias."""
+    if re.search(r"\b(lease|rental|renting)\b", question.lower()) and re.search(
+        r"\b(before|sign|signing|check)\b", question.lower()
+    ):
+        # This section starts with what to verify before a rental contract.
+        lead = next((row for row in index.chunks
+                     if row["source_id"].startswith("easylaw:629:")
+                     and "임대차계약의 당사자 확인" in row["title"]
+                     and row["chunk_id"].endswith(":0")), None)
+        if lead:
+            return [lead]
+    query = question if re.search(r"\b(lease|rental|renting|landlord|tenant|bus|subway|transit|transportation)\b",
+                                  question.lower()) else question + " " + situation
+    found = index.search(query, limit=len(index.chunks))
+    return [row for row in found if guide_source_matches(question, row)][:1]
 
 
 def source_footer(chunks: list[dict]) -> str:

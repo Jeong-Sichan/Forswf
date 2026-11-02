@@ -41,7 +41,7 @@ def main() -> None:
         parser.error("--culture-question requires --knowledge")
     index = None
     if args.knowledge:
-        from knowledge import BM25Index, E5Index, guide_source_matches, load_chunks
+        from knowledge import BM25Index, E5Index, load_chunks, search_guide
 
         chunks = load_chunks(args.knowledge)
         index = E5Index(chunks, cache_path=args.knowledge + ".e5.pt") if args.retriever == "e5" else BM25Index(chunks)
@@ -78,9 +78,8 @@ def main() -> None:
             active_index = index if use_knowledge else None
             if task in {"guide", "culture"} and active_index is None:
                 return "This question needs a knowledge index. / 이 질문에는 지식 자료가 필요합니다."
-            found = active_index.search(expression + " " + situation, limit=5 if task == "guide" else 2) if active_index else None
-            if task == "guide" and found:
-                found = [row for row in found if guide_source_matches(expression, row)][:1]
+            found = (search_guide(active_index, expression, situation) if task == "guide"
+                     else active_index.search(expression + " " + situation, limit=2)) if active_index else None
             if active_index and not found:
                 return "I could not find a relevant source. Please add context or check another source. / 관련 출처를 찾지 못했습니다. 상황을 더 알려주세요."
             if found is not None:

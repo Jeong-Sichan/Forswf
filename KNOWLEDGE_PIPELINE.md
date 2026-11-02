@@ -84,6 +84,16 @@ python demo.py --revision "$KORMO_REVISION" \
   --guide-question 'What should I check before signing a housing lease in Korea?'
 ```
 
+임대차 계약 질문은 일반 유학생 상황 문구 때문에 외국인등록 안내가 상위 검색 결과로 잘못 선택될 수 있었다. 현재 유학생 생활 질문은 질문 자체로 검색하고, 영어 임대차 계약 전 점검 질문은 주택임대차의 **임대차계약의 당사자 확인 등** 첫 문단을 사용한다. GPU 답변 전에 같은 경로로 근거를 확인한다.
+
+```bash
+python -m scripts.query_knowledge --knowledge "$local_law/chunks.jsonl" \
+  --query 'What should I check before signing a housing lease in Korea?' \
+  --retriever bm25 --guide
+```
+
+임대차 계약 전에는 계약 상대방이 등기부상의 소유자나 적법한 대리인인지 확인한다는 출처가 나와야 한다. 이 한 문단은 모든 계약 위험을 다루지 않으므로, 답변도 포괄적인 계약 점검 목록인 것처럼 제시하면 안 된다.
+
 ## 전통문화 상징사전 RAG
 
 공공데이터포털의 [국가유산진흥원 전통문화 상징사전](https://www.data.go.kr/data/15143561/fileData.do)은 문양·유물 설명과 상징적 의미를 제공하며 자료별 이용허락범위가 **공공누리 제1유형(출처 표시)**으로 표시되어 있다. 2026-11-02에 내려받은 CP949 CSV에서 579개 항목을 변환했고 기본 분할에서 579개 청크가 나왔다. [변환기](scripts/ingest_culture_symbols.py)는 CSV의 필드명을 검사하고 자료 URL·제공기관·이용 조건·수정일을 문서에 보존한다. 데이터의 설명은 **전통 유산**에 관한 것이며 현대인의 행동 규칙이나 식당·대학 생활의 근거로 쓰지 않는다. 생활법령 색인과 별도로 스테이징한다.
