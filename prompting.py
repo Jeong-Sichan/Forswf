@@ -26,7 +26,7 @@ TASK_RULES = {
 }
 
 TASK_RULES_EN = {
-    "explain": "Explain the Korean phrase in the stated situation. Separate its direct meaning from assumptions about the setting. A polite delay is not automatically a yes or a no.",
+    "explain": "Translate the whole phrase accurately in Plain meaning: keep its speaker and sentence type, so a first-person statement does not become a command. Separate direct meaning from assumptions about the setting. A polite delay is not automatically a yes or a no. Do not invent a different utterance or tone to fill the last section.",
     "ask": "Suggest a Korean phrase in Hangul followed by its Latin-letter pronunciation. Explain its use in English. Consider the relationship and formality, not age alone.",
 }
 
@@ -129,6 +129,22 @@ def guide_messages(question: str, situation: str, language: str, evidence: list[
             f"URL: {row['url']}\nExcerpt: {row['text'][:900]}"
         )
     user = f"Question: {question.strip()}\nSituation: {situation.strip() or 'not specified'}\n\n" + "\n\n".join(excerpts)
+    return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+
+
+def english_rewrite_messages(original: list[dict[str, str]], draft: str, task: str) -> list[dict[str, str]]:
+    """Ask the base model to translate/reformat a failed English draft without adding facts."""
+    headings = LANGUAGE_RULES["en"].get(task)
+    if not headings:
+        raise ValueError("English rewrite needs an explain or ask task")
+    system = (
+        "You are an English editor for a Korean-life assistant. Rewrite the draft to answer "
+        "the original request in clear English. Keep only facts supported by the request or excerpts. "
+        "Do not add a location, cultural rule, or another person's hidden intention. "
+        "Retain one short Korean expression and its Latin-letter pronunciation. "
+        "Every section must include English explanation. Use exactly these headings in order:\n" + headings
+    )
+    user = "Original request:\n" + original[-1]["content"][:2500] + "\n\nDraft to rewrite:\n" + draft[:1800]
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 

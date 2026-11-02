@@ -1,7 +1,7 @@
 import unittest
 
 from output_style import english_issues, normalize_pronunciation, remove_inline_citations
-from prompting import messages
+from prompting import english_rewrite_messages, messages
 from pronunciation import romanize
 
 
@@ -60,6 +60,14 @@ class OutputStyleTests(unittest.TestCase):
         turns = messages("반찬은 셀프입니다", "Restaurant sign", "Customer", evidence=[])
         self.assertIn("Latin-letter pronunciation", turns[0]["content"])
         self.assertIn("Do not put bracket citation numbers", turns[0]["content"])
+
+    def test_failed_korean_greeting_can_be_rewritten_in_english(self):
+        original = messages("How do I greet a professor?", "First meeting", "Student and professor", task="ask")
+        rewrite = english_rewrite_messages(original, "1. 한국어 표현: 안녕하세요", "ask")
+        self.assertIn("1. Korean phrase", rewrite[0]["content"])
+        self.assertIn("4. What may vary", rewrite[0]["content"])
+        self.assertIn("안녕하세요", rewrite[1]["content"])
+        self.assertIn("How do I greet a professor?", rewrite[1]["content"])
 
     def test_inline_citation_is_removed(self):
         self.assertEqual(remove_inline_citations("This is self-service. [1]"), "This is self-service.")

@@ -1,9 +1,10 @@
 """Run on a machine with a KoRMo-compatible GPU and installed dependencies."""
 
 import argparse
+import sys
 from contextlib import nullcontext
 
-from prompting import guide_messages, messages, render, require_pinned_revision
+from prompting import english_rewrite_messages, guide_messages, messages, render, require_pinned_revision
 from kormo_compat import fix_causal_mask_keyword
 from output_style import HEADINGS, english_issues, normalize_pronunciation, remove_inline_citations
 
@@ -98,16 +99,22 @@ def main() -> None:
         answer = infer(conversation, base_only=base_for_english)
         if language == "en" and enforce_style:
             answer = normalize_pronunciation(answer, task, expression)
-        if language == "en" and enforce_style and english_issues(answer, task):
-            corrected = [dict(turn) for turn in conversation]
-            corrected[-1]["content"] += (
-                "\nFinal check: Write every explanation in English. Include every required English section "
-                "with a complete English sentence. Do not write Korean prose."
-            )
+        initial_issues = english_issues(answer, task) if language == "en" and enforce_style else []
+        if initial_issues:
+            if task in HEADINGS:
+                corrected = english_rewrite_messages(conversation, answer, task)
+            else:
+                corrected = [dict(turn) for turn in conversation]
+                corrected[-1]["content"] += "\nFinal check: Rewrite the answer in English only; do not write Korean prose."
             prefix = HEADINGS[task][0] + "\n" if task in HEADINGS else ""
-            answer = normalize_pronunciation(infer(corrected, base_only=base_for_english, prefix=prefix), task, expression)
-            if english_issues(answer, task):
+            revised = normalize_pronunciation(infer(corrected, base_only=base_for_english, prefix=prefix), task, expression)
+            final_issues = english_issues(revised, task)
+            if final_issues:
+                if args.smoke_suite:
+                    print(f"[English style check] {task}: first={initial_issues}; rewrite={final_issues}", file=sys.stderr)
+                    print("[First draft]\n" + answer + "\n[Rewrite]\n" + revised, file=sys.stderr)
                 return "I could not produce a reliable English answer. Please try again with more context."
+            answer = revised
         answer = remove_inline_citations(answer)
         if found:
             from knowledge import source_footer
