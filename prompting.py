@@ -11,19 +11,33 @@ SYSTEM = """당신은 한국 생활에서 쓰는 한국어 표현을 안내하�
 입력에 없는 식당 유형, 메뉴, 상대의 동기 같은 세부사항을 만들어 내지 마세요.
 실제 방문자가 할 수 있는 자연스러운 행동을 제안하세요."""
 
+SYSTEM_EN = """You explain Korean expressions and everyday situations to newcomers.
+Use only the user's phrase, situation, relationship, and supplied excerpts. Do not claim to know
+another person's intention or invent details about a restaurant, place, region, or custom.
+If context is missing, say what is unknown and suggest one practical question or action.
+Do not guess medical, legal, or institutional rules."""
+
 TASK_RULES = {
     "explain": "주어진 한국어 표현을 해당 상황에 맞춰 해설하세요. 뜻이 여러 가지일 수 있으면 구분하세요.",
     "ask": "질문에 맞는 한국어 표현을 한글로 제안하고, 언제 쓰는지 설명하세요. 로마자 표기는 보조로만 쓰세요. 나이만으로 말투를 단정하지 말고 관계와 격식을 고려하세요.",
 }
 
+TASK_RULES_EN = {
+    "explain": "Explain the Korean phrase in the stated situation. Separate its direct meaning from assumptions about the setting.",
+    "ask": "Suggest a Korean phrase in Hangul and explain when to use it. Consider the relationship and formality, not age alone.",
+}
+
+SOURCE_RULES_EN = """Use excerpt numbers only for claims directly supported by those excerpts. Put a short citation such as [1] after the supported claim. A source about side dishes does not establish a restaurant's service layout. Do not add source-summary lines under the four headings. If no excerpt supports a cultural claim, leave it out or state that the sources do not establish it. Keep each section to one or two sentences."""
+SOURCE_RULES_KO = """발췌문이 직접 뒷받침하는 사실에만 [1]처럼 번호를 붙이세요. 반찬을 설명하는 자료만으로 식당의 실제 운영 방식이나 배치 장소를 단정할 수 없습니다. 네 항목 아래에 출처 요약을 별도 줄로 반복하지 마세요. 근거가 없는 문화적 주장이나 행동 세부사항은 빼거나 확인이 필요하다고 말하세요. 각 항목은 한두 문장으로 쓰세요."""
+
 LANGUAGE_RULES = {
     "en": {
-        "explain": """Answer in clear, simple English. Keep the Korean expression visible. Use exactly these four headings:
+        "explain": """Reply only in clear, simple English, except when quoting Korean expressions. Keep the Korean expression visible. Use exactly these four headings:
 1. Plain meaning
 2. Meaning in this situation
 3. What to say or do
 4. What could change the meaning""",
-        "ask": """Answer in clear, simple English. Use exactly these four headings:
+        "ask": """Reply only in clear, simple English, except when quoting Korean expressions. Use exactly these four headings:
 1. Korean phrase
 2. When to use it
 3. What to say or do
@@ -67,10 +81,10 @@ def messages(expression: str, situation: str, relationship: str, language: str =
     situation = situation.strip()[:1000] or "알 수 없음"
     relationship = relationship.strip()[:200] or "알 수 없음"
     label = "표현" if task == "explain" else "질문"
-    system = SYSTEM + "\n" + TASK_RULES[task] + "\n" + LANGUAGE_RULES[language][task]
+    system = (SYSTEM_EN + "\n" + TASK_RULES_EN[task]) if language == "en" else (SYSTEM + "\n" + TASK_RULES[task])
     user = f"{label}: {expression}\n상황: {situation}\n상대와의 관계: {relationship}\n답변 언어: {language}"
     if evidence is not None:
-        system += "\nSTRICT SOURCE RULES: Use the supplied excerpts only for factual claims about Korean culture or customs. Add an inline citation such as [1] to every factual claim supported by an excerpt. Do not cite a passage that does not support the claim. If the excerpts do not establish a detail, say so plainly instead of guessing. Never invent locations, restaurant layouts, regional differences, venue types, motives, or gestures. Keep the direct meaning of the user's phrase separate from facts in the excerpts. A general article does not establish what a particular person or business intends or does."
+        system += "\n" + (SOURCE_RULES_EN if language == "en" else SOURCE_RULES_KO)
         if evidence:
             excerpts = []
             for index, item in enumerate(evidence[:3], 1):
@@ -80,6 +94,7 @@ def messages(expression: str, situation: str, relationship: str, language: str =
             user += "\n\nSource excerpts / 출처 발췌:\n" + "\n\n".join(excerpts)
         else:
             user += "\n\nSource excerpts / 출처 발췌: none found. Do not invent a citation."
+    system += "\n" + LANGUAGE_RULES[language][task]
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
