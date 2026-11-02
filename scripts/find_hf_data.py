@@ -11,8 +11,14 @@ QUERIES = (
     "Korean conversation",
     "Korean dialogue",
     "Korean culture",
+    "Korean etiquette",
+    "Korean daily life",
+    "Korean heritage",
+    "Korean instruction",
     "한국어 관용구",
     "한국어 대화",
+    "한국 문화",
+    "생활 한국어",
 )
 
 
@@ -22,7 +28,7 @@ def main() -> None:
     for query in QUERIES:
         print(f"\n## {query}")
         try:
-            candidates = api.list_datasets(search=query, limit=5)
+            candidates = api.list_datasets(search=query, limit=15)
             for info in candidates:
                 if info.id in found:
                     continue
