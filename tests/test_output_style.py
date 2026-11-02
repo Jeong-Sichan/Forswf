@@ -1,7 +1,7 @@
 import unittest
 
-from output_style import english_issues, normalize_pronunciation, remove_inline_citations
-from prompting import english_rewrite_messages, messages
+from output_style import english_issues, korean_issues, normalize_pronunciation, remove_inline_citations
+from prompting import english_rewrite_messages, messages, translate_korean_answer_messages
 from pronunciation import romanize
 
 
@@ -68,6 +68,23 @@ class OutputStyleTests(unittest.TestCase):
         self.assertIn("4. What may vary", rewrite[0]["content"])
         self.assertIn("안녕하세요", rewrite[1]["content"])
         self.assertIn("How do I greet a professor?", rewrite[1]["content"])
+
+    def test_korean_lora_draft_can_be_translated_without_new_claims(self):
+        original = messages("생각해 볼게요", "A friend replies to an invitation", "Friends")
+        draft = (
+            "1. 쉬운 뜻\n생각한 뒤 답하겠다는 말입니다.\n"
+            "2. 상황에 따른 해석\n아직 결정하지 않았습니다.\n"
+            "3. 적절한 말이나 행동\n시간을 주고 기다립니다.\n"
+            "4. 달라질 수 있는 점\n이 말만으로 수락 여부를 알 수 없습니다."
+        )
+        self.assertEqual(korean_issues(draft, "explain"), [])
+        translated = translate_korean_answer_messages(original, draft, "explain")
+        self.assertIn("Do not add facts", translated[0]["content"])
+        self.assertIn("1. Plain meaning", translated[0]["content"])
+        self.assertIn(draft, translated[1]["content"])
+
+    def test_short_korean_lora_draft_is_rejected(self):
+        self.assertIn("Korean draft lacks required sections", korean_issues("안녕하세요라고 인사하세요.", "ask"))
 
     def test_inline_citation_is_removed(self):
         self.assertEqual(remove_inline_citations("This is self-service. [1]"), "This is self-service.")

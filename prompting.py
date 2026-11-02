@@ -148,6 +148,26 @@ def english_rewrite_messages(original: list[dict[str, str]], draft: str, task: s
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
+def translate_korean_answer_messages(original: list[dict[str, str]], korean_answer: str, task: str) -> list[dict[str, str]]:
+    """Translate a Korean LoRA answer while retaining its facts and uncertainty."""
+    if task in LANGUAGE_RULES["en"]:
+        format_rule = "Use exactly these four English headings in order, with English explanation under each:\n" + LANGUAGE_RULES["en"][task]
+    elif task == "guide":
+        format_rule = "Answer in short, clear English paragraphs."
+    else:
+        raise ValueError("Unknown translation task")
+    system = (
+        "You translate a Korean answer for an international student. Translate its meaning into "
+        "natural English. Preserve who is speaking, uncertainty, and practical advice. "
+        "Keep one useful Korean expression in Hangul with a Latin-letter pronunciation. "
+        "Do not add facts, source claims, locations, deadlines, or steps that are absent from "
+        "the Korean answer or original request. Do not write Korean explanation sentences. "
+        "Do not put citation numbers in the answer. " + format_rule
+    )
+    user = "Original request:\n" + original[-1]["content"][:2500] + "\n\nKorean answer to translate:\n" + korean_answer[:1800]
+    return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+
+
 def render(tokenizer, conversation: list[dict[str, str]], generation: bool) -> str:
     if tokenizer.chat_template:
         return tokenizer.apply_chat_template(

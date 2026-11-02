@@ -67,6 +67,14 @@ python demo.py --revision "$KORMO_REVISION" \
   --smoke-suite
 ```
 
+한국어 답변에 LoRA를 사용한 뒤 영어로 번역하는 방식도 시험할 수 있다. `--english-mode translate-lora`는 한국어 초안에 네 항목이 있는지 확인하고, 기본 KoRMo로 번역한다. `--smoke-suite`는 한국어 초안과 실제 사용 경로를 표시한다. 번역 형식이 실패하면 기본 영어 경로로 돌아간다. 번역은 한국어 초안의 사실 오류를 고치지 않으므로, 두 답안의 의미와 근거 없는 장소·절차 단정도 직접 비교한다. 아직 이 방식이 기본 영어 경로보다 낫다는 GPU 평가 결과는 없다.
+
+```bash
+python demo.py --revision "$KORMO_REVISION" \
+  --adapter /data/$USER/models/malmaek/dialogue-adapter-<job-id> \
+  --english-mode translate-lora --smoke-suite
+```
+
 한국어기초사전의 `사전 검색` API에 대해서는 사용자 제공 공식 안내 화면에서 `https://krdict.korean.go.kr/api/search`, `key`·`q`·`start` 요청 변수 및 XML의 `target_code`·`word`·`sup_no`·`example`·`link` 필드를 확인했다. 이를 읽는 [검색 후보 수집기](scripts/collect_krdict.py)가 있다. 이 응답에는 **뜻풀이가 없으므로** 아직 검색 지식 문서로 합치지 않는다. `사전 내용` API 응답과 뜻풀이·용례 이용 조건을 확인한 뒤에만 본문 수집과 RAG 색인을 추가한다.
 
 발급받은 키를 명령줄 인자나 코드에 적지 말고, 할당받은 계산 노드의 셸에서 입력한다. 이미 캡처에 노출한 개인 키라면 먼저 재발급한다.

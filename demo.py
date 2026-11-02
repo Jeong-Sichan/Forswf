@@ -4,9 +4,11 @@ import argparse
 import sys
 from contextlib import nullcontext
 
-from prompting import english_rewrite_messages, guide_messages, messages, render, require_pinned_revision
+from prompting import (english_rewrite_messages, guide_messages, messages, render,
+                       require_pinned_revision, translate_korean_answer_messages)
 from kormo_compat import fix_causal_mask_keyword
-from output_style import HEADINGS, english_issues, normalize_pronunciation, remove_inline_citations
+from output_style import (HEADINGS, english_issues, korean_issues,
+                          normalize_pronunciation, remove_inline_citations)
 
 
 def main() -> None:
@@ -14,6 +16,8 @@ def main() -> None:
     parser.add_argument("--model", default="KORMo-Team/KORMo-10B-sft")
     parser.add_argument("--revision", required=True, help="Pinned Hugging Face model commit SHA")
     parser.add_argument("--adapter", help="Optional locally trained LoRA adapter directory")
+    parser.add_argument("--english-mode", choices=("base", "translate-lora"), default="base",
+                        help="Use base English generation or translate a Korean LoRA draft with the base model")
     parser.add_argument("--knowledge", help="Chunk JSONL staged under /local_datasets on this compute node")
     parser.add_argument("--retriever", choices=("e5", "bm25"), default="e5")
     parser.add_argument("--smoke", action="store_true", help="Generate one answer and exit without a web server")
@@ -25,6 +29,8 @@ def main() -> None:
     require_pinned_revision(args.revision)
     if args.compare_adapter and not args.adapter:
         parser.error("--compare-adapter requires --adapter")
+    if args.english_mode == "translate-lora" and not args.adapter:
+        parser.error("--english-mode translate-lora requires --adapter")
     index = None
     if args.knowledge:
         from knowledge import BM25Index, E5Index, guide_source_matches, load_chunks
@@ -96,25 +102,49 @@ def main() -> None:
 
         # The existing dialogue LoRA learned Korean turn continuation, not English explanations.
         base_for_english = bool(args.adapter and language == "en" and enforce_style)
-        answer = infer(conversation, base_only=base_for_english)
-        if language == "en" and enforce_style:
-            answer = normalize_pronunciation(answer, task, expression)
-        initial_issues = english_issues(answer, task) if language == "en" and enforce_style else []
-        if initial_issues:
+
+        def finish_english(candidate: str) -> str | None:
+            candidate = normalize_pronunciation(candidate, task, expression)
+            initial_issues = english_issues(candidate, task)
+            if not initial_issues:
+                return candidate
             if task in HEADINGS:
-                corrected = english_rewrite_messages(conversation, answer, task)
+                corrected = english_rewrite_messages(conversation, candidate, task)
             else:
                 corrected = [dict(turn) for turn in conversation]
                 corrected[-1]["content"] += "\nFinal check: Rewrite the answer in English only; do not write Korean prose."
             prefix = HEADINGS[task][0] + "\n" if task in HEADINGS else ""
-            revised = normalize_pronunciation(infer(corrected, base_only=base_for_english, prefix=prefix), task, expression)
+            revised = normalize_pronunciation(infer(corrected, base_only=True, prefix=prefix), task, expression)
             final_issues = english_issues(revised, task)
             if final_issues:
                 if args.smoke_suite:
                     print(f"[English style check] {task}: first={initial_issues}; rewrite={final_issues}", file=sys.stderr)
-                    print("[First draft]\n" + answer + "\n[Rewrite]\n" + revised, file=sys.stderr)
+                    print("[First draft]\n" + candidate + "\n[Rewrite]\n" + revised, file=sys.stderr)
+                return None
+            return revised
+
+        answer = None
+        if language == "en" and enforce_style and args.english_mode == "translate-lora":
+            korean_turns = (guide_messages(expression, situation, "ko", found)
+                            if task == "guide" else messages(expression, situation, relationship, "ko", task, evidence))
+            korean_draft = infer(korean_turns)
+            draft_issues = korean_issues(korean_draft, task)
+            if args.smoke_suite:
+                print("[Korean LoRA draft]\n" + korean_draft, file=sys.stderr)
+                if draft_issues:
+                    print("[Translation skipped] " + ", ".join(draft_issues), file=sys.stderr)
+            if not draft_issues:
+                translated = infer(translate_korean_answer_messages(conversation, korean_draft, task), base_only=True)
+                answer = finish_english(translated)
+                if answer and args.smoke_suite:
+                    print("[English path] Korean LoRA draft → base KoRMo translation", file=sys.stderr)
+        if answer is None:
+            direct = infer(conversation, base_only=base_for_english)
+            answer = finish_english(direct) if language == "en" and enforce_style else direct
+            if answer is None:
                 return "I could not produce a reliable English answer. Please try again with more context."
-            answer = revised
+            if args.smoke_suite and language == "en" and enforce_style:
+                print("[English path] direct base KoRMo", file=sys.stderr)
         answer = remove_inline_citations(answer)
         if found:
             from knowledge import source_footer

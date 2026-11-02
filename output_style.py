@@ -15,6 +15,10 @@ HEADINGS = {
         "3. What to say or do", "4. What may vary",
     ),
 }
+KOREAN_HEADINGS = {
+    "explain": ("1. 쉬운 뜻", "2. 상황에 따른 해석", "3. 적절한 말이나 행동", "4. 달라질 수 있는 점"),
+    "ask": ("1. 추천 표현", "2. 사용하는 상황", "3. 적절한 말이나 행동", "4. 달라질 수 있는 점"),
+}
 
 PRONOUNCED_KOREAN = re.compile(
     r"[\"'“‘]?[가-힣][가-힣 ]{0,39}[\"'”’]?\s*\([A-Za-z][A-Za-z\s'-]*\)"
@@ -84,6 +88,20 @@ def english_issues(answer: str, task: str) -> list[str]:
     if unpronounced > 8:
         issues.append("Korean prose in English answer")
     return issues
+
+
+def korean_issues(answer: str, task: str) -> list[str]:
+    if len(re.findall(r"[가-힣]", answer)) < 6:
+        return ["Korean draft is too short"]
+    if task in KOREAN_HEADINGS:
+        positions = [answer.find(heading) for heading in KOREAN_HEADINGS[task]]
+        if any(position < 0 for position in positions) or positions != sorted(positions):
+            return ["Korean draft lacks required sections"]
+        for index, position in enumerate(positions):
+            end = positions[index + 1] if index < 3 else len(answer)
+            if len(answer[position + len(KOREAN_HEADINGS[task][index]):end].strip(" \n\t:*#-")) < 4:
+                return ["Korean draft has an empty section"]
+    return []
 
 
 def remove_inline_citations(answer: str) -> str:
