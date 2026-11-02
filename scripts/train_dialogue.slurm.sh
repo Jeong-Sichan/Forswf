@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Submit from the project directory after activating malmaek:
+# Submit from the project directory:
 # sbatch -p <batch_partition> scripts/train_dialogue.slurm.sh /data/$USER/datasets/aihub-dialogue-sft.tar.gz
 #SBATCH --job-name=malmaek-dialogue
 #SBATCH --gres=gpu:1
@@ -17,6 +17,8 @@ repository=${SLURM_SUBMIT_DIR:?}
 local_data="/local_datasets/${USER}/malmaek-dialogue-${SLURM_JOB_ID}/data"
 model_root="/data/${USER}/models/malmaek"
 revision=${KORMO_REVISION:?Export the pinned KoRMo commit SHA before sbatch}
+source "/data/${USER}/envs/malmaek/bin/activate"
+cd "$repository"
 
 bash "$repository/scripts/stage_dataset.sh" "$1" "$local_data"
 export HF_HOME="$model_root/hf-cache"
