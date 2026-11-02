@@ -27,6 +27,12 @@ def conversations(value):
         for child in value.values():
             yield from conversations(child)
     elif isinstance(value, list):
+        if len(value) >= 2 and all(isinstance(item, dict) for item in value):
+            if all(any(isinstance(item.get(key), str) for key in ("form", "utterance", "text"))
+                   and any(key in item for key in ("speaker_id", "speaker", "speakerId", "participantID"))
+                   for item in value):
+                yield value
+                return
         for child in value:
             yield from conversations(child)
 
@@ -35,7 +41,7 @@ def windows(utterances: list[dict], size: int, stride: int):
     clean = []
     speaker_names = {}
     for item in utterances:
-        form = item.get("form")
+        form = next((item[key] for key in ("form", "utterance", "text") if isinstance(item.get(key), str)), None)
         if not isinstance(form, str):
             clean.append(None)
             continue
@@ -43,7 +49,7 @@ def windows(utterances: list[dict], size: int, stride: int):
         if not 2 <= len(form) <= 500 or PRIVATE_PATTERN.search(form):
             clean.append(None)
             continue
-        speaker = str(item.get("speaker_id", "unknown"))
+        speaker = str(next((item[key] for key in ("speaker_id", "speaker", "speakerId", "participantID") if item.get(key) is not None), "unknown"))
         speaker_names.setdefault(speaker, f"S{len(speaker_names) + 1}")
         clean.append({"speaker": speaker_names[speaker], "text": form, "utterance_id": str(item.get("id", ""))})
     for start in range(0, max(0, len(clean) - size + 1), stride):
