@@ -43,7 +43,17 @@ class KnowledgeTests(unittest.TestCase):
         def fake_api(_language, params):
             if params.get("meta") == "siteinfo":
                 return {"query": {"rightsinfo": {"text": "CC BY-SA", "url": "https://example.org/license"}}}
+            self.assertEqual(params["exlimit"], 10)
             return {"query": {"pages": [{"pageid": 7, "title": "Korean culture", "fullurl": "https://example.org/page", "extract": self.doc["text"], "revisions": [{"revid": 12, "timestamp": "2026-01-01T00:00:00Z"}]}]}}
+
+        def limited_api(_language, params):
+            if params.get("meta") == "siteinfo":
+                return {"query": {"rightsinfo": {"text": "CC BY-SA", "url": "https://example.org/license"}}}
+            def page(number, extract):
+                return {"pageid": number, "title": f"Page {number}", "fullurl": f"https://example.org/{number}", "extract": extract, "revisions": [{"revid": number}]}
+            if params["titles"] == "Page 2":
+                return {"query": {"pages": [page(2, self.doc["text"])]}}
+            return {"query": {"pages": [page(1, self.doc["text"]), page(2, "")]}}
 
         with tempfile.TemporaryDirectory() as directory, patch.object(collect_wikimedia, "api", side_effect=fake_api):
             collect_wikimedia.collect("en", ["Korean culture"], Path(directory))
@@ -53,6 +63,9 @@ class KnowledgeTests(unittest.TestCase):
             self.assertEqual(record["url"], "https://example.org/page")
             with tarfile.open(Path(directory) / "knowledge.tar.gz") as archive:
                 self.assertEqual(archive.getnames(), ["documents.jsonl"])
+        with tempfile.TemporaryDirectory() as directory, patch.object(collect_wikimedia, "api", side_effect=limited_api):
+            collect_wikimedia.collect("en", ["Page 1", "Page 2"], Path(directory))
+            self.assertEqual(len((Path(directory) / "documents.jsonl").read_text().splitlines()), 2)
 
 
 if __name__ == "__main__":

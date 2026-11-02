@@ -40,11 +40,17 @@ def collect(language: str, titles: list[str], output: Path) -> None:
     license_name = rights["text"] + " (" + rights["url"] + ")"
     records = []
     for offset in range(0, len(titles), 10):
-        result = api(language, {
+        params = {
             "action": "query", "prop": "extracts|info|revisions", "explaintext": 1,
-            "inprop": "url", "rvprop": "timestamp|ids", "titles": "|".join(titles[offset:offset + 10]),
-        })
+            "exlimit": 10, "inprop": "url", "rvprop": "timestamp|ids",
+            "titles": "|".join(titles[offset:offset + 10]),
+        }
+        result = api(language, params)
         for page in result["query"]["pages"]:
+            if not page.get("missing") and not page.get("extract", "").strip():
+                # A single-page retry also handles servers that cap multi-page extracts.
+                single = api(language, dict(params, titles=page["title"], exlimit=1))
+                page = single["query"]["pages"][0]
             if page.get("missing") or not page.get("extract", "").strip() or not page.get("fullurl"):
                 print("skipped:", page.get("title"))
                 continue
