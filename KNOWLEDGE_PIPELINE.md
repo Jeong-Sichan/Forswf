@@ -4,15 +4,29 @@
 
 현재 자동 수집기는 법제처의 유학생 생활법령 안내와 위키백과의 **임시 문화 출처**를 다룬다. 다른 공식 자료는 [공식 자료 도입 순서](KNOWLEDGE_PLAN.md#공식-자료-도입-순서)에 따라 추가한다. 모두의 말뭉치는 검수할 대화 사례를 찾는 데 사용한다. 각 자료의 실제 이용 조건을 확인하기 전에는 학습이나 공개 재배포에 넣지 않는다.
 
-## 공식 유학생 생활 안내 RAG 첫 실행
-
-법제처 [찾기쉬운 생활법령정보의 외국인유학생 안내](https://www.easylaw.go.kr/CSP/CsmMain.laf?csmSeq=2853)는 외국인등록·주거·은행·보험·시간제 취업 등 16개 본문 항목을 제공한다. [저작권정책](https://www.easylaw.go.kr/CSP/AboutCopyright.laf?topMenu=introUl3)은 생활법령정보의 출처를 표시한 활용을 허용하지만 제3자 저작물은 별도 조건을 따른다. 수집기는 원문에 `출처:` 표기가 있는 8개 항목을 `attribution_review.jsonl`로 분리하고, 나머지 8개만 RAG 압축 파일에 넣는다. 각 항목의 원문 URL과 표시된 기준일을 보존한다. 이 선별은 제3자 권리에 대한 최종 법률 검토를 대신하지 않는다.
-
-`srun`으로 받은 **계산 노드**에서 아래를 실행한다. `git pull`은 이 변경이 원격 브랜치에 반영된 뒤 실행한다. 원본 압축 파일은 `/data`, 검색용 청크는 `/local_datasets`에 둔다.
+코드 저장소는 공유 `/data`에 있다. 계산 노드에서 GitHub DNS가 막히면 별도 터미널로 로그인 노드에 접속해 **코드 갱신만** 한다. 로그인 노드에서도 GitHub에 연결할 수 없으면 개인 PC에서 받은 Git 번들을 `/data/$USER/datasets/`로 전송한 뒤 그 번들에서 가져온다. 기존 작업 내용을 덮어쓰지 않도록 `--ff-only`를 유지한다. Python·대량 자료 작업은 계산 노드에서 실행한다.
 
 ```bash
 cd /data/$USER/repos/swf/Forswf
 git pull --ff-only
+```
+
+GitHub 접속이 안 될 때만, 전송한 번들로 대신 갱신한다.
+
+```bash
+cd /data/$USER/repos/swf/Forswf
+git fetch /data/$USER/datasets/malmaek-update.bundle codex/malmaek-seraph
+git merge --ff-only FETCH_HEAD
+```
+
+## 공식 유학생 생활 안내 RAG 첫 실행
+
+법제처 [찾기쉬운 생활법령정보의 외국인유학생 안내](https://www.easylaw.go.kr/CSP/CsmMain.laf?csmSeq=2853)는 외국인등록·주거·은행·보험·시간제 취업 등 16개 본문 항목을 제공한다. [저작권정책](https://www.easylaw.go.kr/CSP/AboutCopyright.laf?topMenu=introUl3)은 생활법령정보의 출처를 표시한 활용을 허용하지만 제3자 저작물은 별도 조건을 따른다. 수집기는 원문에 `출처:` 표기가 있는 8개 항목을 `attribution_review.jsonl`로 분리하고, 나머지 8개만 RAG 압축 파일에 넣는다. 각 항목의 원문 URL과 표시된 기준일을 보존한다. 이 선별은 제3자 권리에 대한 최종 법률 검토를 대신하지 않는다.
+
+코드 갱신을 마친 뒤 `srun`으로 받은 **계산 노드**에서 아래를 실행한다. 원본 압축 파일은 `/data`, 검색용 청크는 `/local_datasets`에 둔다.
+
+```bash
+cd /data/$USER/repos/swf/Forswf
 source /data/$USER/envs/malmaek/bin/activate
 python -m scripts.collect_easylaw_students \
   --output /data/$USER/datasets/malmaek-easylaw-students
@@ -59,7 +73,6 @@ python demo.py --revision "$KORMO_REVISION" \
 
 ```bash
 cd /data/$USER/repos/swf/Forswf
-git pull --ff-only
 source /data/$USER/envs/malmaek/bin/activate
 read -rsp '한국어기초사전 API 키: ' KRDICT_API_KEY; echo
 export KRDICT_API_KEY
@@ -76,7 +89,6 @@ unset KRDICT_API_KEY
 
 ```bash
 cd /data/$USER/repos/swf/Forswf
-git pull --ff-only
 source /data/$USER/envs/malmaek/bin/activate
 export HF_HOME=/data/$USER/models/malmaek/hf-cache
 export KORMO_REVISION=547fa40eeb8c69d3c5e278daf906d315c4f8e7ea
