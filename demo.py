@@ -4,7 +4,7 @@ import argparse
 import sys
 from contextlib import nullcontext
 
-from prompting import (english_rewrite_messages, guide_messages, messages, render,
+from prompting import (culture_messages, english_rewrite_messages, guide_messages, messages, render,
                        require_pinned_revision, translate_korean_answer_messages)
 from kormo_compat import fix_causal_mask_keyword
 from output_style import (HEADINGS, english_issues, korean_issues,
@@ -25,6 +25,8 @@ def main() -> None:
     parser.add_argument("--smoke-student", action="store_true", help="Test a sourced student-life question")
     parser.add_argument("--guide-question", help="Answer one student-life question from --knowledge and exit")
     parser.add_argument("--guide-language", choices=("en", "ko"), default="en")
+    parser.add_argument("--culture-question", help="Answer one cultural-heritage question from --knowledge and exit")
+    parser.add_argument("--culture-language", choices=("en", "ko"), default="en")
     parser.add_argument("--compare-adapter", action="store_true", help="Compare base and LoRA answers using one model load")
     parser.add_argument("--share", action="store_true", help="Create a temporary Gradio link")
     args = parser.parse_args()
@@ -35,6 +37,8 @@ def main() -> None:
         parser.error("--english-mode translate-lora requires --adapter")
     if args.guide_question and not args.knowledge:
         parser.error("--guide-question requires --knowledge")
+    if args.culture_question and not args.knowledge:
+        parser.error("--culture-question requires --knowledge")
     index = None
     if args.knowledge:
         from knowledge import BM25Index, E5Index, guide_source_matches, load_chunks
@@ -72,8 +76,8 @@ def main() -> None:
                         use_knowledge: bool, enforce_style: bool = True) -> str:
         try:
             active_index = index if use_knowledge else None
-            if task == "guide" and active_index is None:
-                return "Student-life questions need a knowledge index. / 유학생 생활 질문에는 지식 자료가 필요합니다."
+            if task in {"guide", "culture"} and active_index is None:
+                return "This question needs a knowledge index. / 이 질문에는 지식 자료가 필요합니다."
             found = active_index.search(expression + " " + situation, limit=5 if task == "guide" else 2) if active_index else None
             if task == "guide" and found:
                 found = [row for row in found if guide_source_matches(expression, row)][:1]
@@ -85,8 +89,12 @@ def main() -> None:
                 evidence = evidence_for_prompt(found)
             else:
                 evidence = None
-            conversation = (guide_messages(expression, situation, language, found)
-                            if task == "guide" else messages(expression, situation, relationship, language, task, evidence))
+            if task == "guide":
+                conversation = guide_messages(expression, situation, language, found)
+            elif task == "culture":
+                conversation = culture_messages(expression, situation, language, found)
+            else:
+                conversation = messages(expression, situation, relationship, language, task, evidence)
         except ValueError as exc:
             return str(exc)
 
@@ -128,7 +136,7 @@ def main() -> None:
             return revised
 
         answer = None
-        if language == "en" and enforce_style and args.english_mode == "translate-lora":
+        if language == "en" and enforce_style and args.english_mode == "translate-lora" and task != "culture":
             korean_turns = (guide_messages(expression, situation, "ko", found)
                             if task == "guide" else messages(expression, situation, relationship, "ko", task, evidence))
             korean_draft = infer(korean_turns)
@@ -183,6 +191,10 @@ def main() -> None:
         print(explain(args.guide_question, "International student living in Korea", "", args.guide_language, "guide"))
         return
 
+    if args.culture_question:
+        print(explain(args.culture_question, "Learning about Korean cultural heritage", "", args.culture_language, "culture"))
+        return
+
     if args.compare_adapter:
         checks = [
             ("Restaurant sign / 식당 안내", "반찬은 셀프입니다", "A sign in a restaurant", "Customer and restaurant", "en", "explain"),
@@ -200,7 +212,7 @@ def main() -> None:
 
     with gr.Blocks(title="말맥 | 한국어 맥락 해설기") as ui:
         gr.Markdown("# 말맥 | Malmaek\nUnderstand Korean expressions in context. 한국어 표현을 상황에 맞게 설명합니다. AI answers may be wrong. Retrieved passages are shown for checking; their presence does not verify every claim in the answer.")
-        task = gr.Radio(choices=[("Explain a phrase / 표현 해설", "explain"), ("Ask a Korean phrase / 표현 질문", "ask"), ("Student life / 유학생 생활", "guide")], value="explain", label="Task / 기능")
+        task = gr.Radio(choices=[("Explain a phrase / 표현 해설", "explain"), ("Ask a Korean phrase / 표현 질문", "ask"), ("Student life / 유학생 생활", "guide"), ("Cultural heritage / 전통문화", "culture")], value="explain", label="Task / 기능")
         expression = gr.Textbox(label="Korean expression or question / 표현 또는 질문", placeholder="생각해 볼게요")
         situation = gr.Textbox(label="Situation / 상황", placeholder="A reply after inviting a friend to a weekend meetup")
         relationship = gr.Textbox(label="Relationship / 상대와의 관계", placeholder="Friends")

@@ -6,6 +6,8 @@
 
 코드 저장소는 공유 `/data`에 있다. 계산 노드에서 GitHub DNS가 막히면 별도 터미널로 로그인 노드에 접속해 **코드 갱신만** 한다. 로그인 노드에서도 GitHub에 연결할 수 없으면 개인 PC에서 받은 Git 번들을 `/data/$USER/datasets/`로 전송한 뒤 그 번들에서 가져온다. 기존 작업 내용을 덮어쓰지 않도록 `--ff-only`를 유지한다. Python·대량 자료 작업은 계산 노드에서 실행한다.
 
+새 수집기 옵션이 없다고 나오면 서버 체크아웃이 옛 버전이다. 코드 갱신 후 계산 노드에서 `git rev-parse --short HEAD`와 `python -m scripts.collect_easylaw_students --help`의 `--guides` 표시를 확인한다. 수집이 실패했다면 **병합·스테이징을 이어서 실행하지 않는다.** 병합 입력의 `documents.jsonl`과 압축 파일이 실제로 생겼는지 확인한 뒤 다음 단계로 간다.
+
 ```bash
 cd /data/$USER/repos/swf/Forswf
 git pull --ff-only
@@ -81,6 +83,33 @@ python demo.py --revision "$KORMO_REVISION" \
   --knowledge "$local_law/chunks.jsonl" \
   --guide-question 'What should I check before signing a housing lease in Korea?'
 ```
+
+## 전통문화 상징사전 RAG
+
+공공데이터포털의 [국가유산진흥원 전통문화 상징사전](https://www.data.go.kr/data/15143561/fileData.do)은 문양·유물 설명과 상징적 의미를 제공하며 자료별 이용허락범위가 **공공누리 제1유형(출처 표시)**으로 표시되어 있다. 2026-11-02에 내려받은 CP949 CSV에서 579개 항목을 변환했고 기본 분할에서 579개 청크가 나왔다. [변환기](scripts/ingest_culture_symbols.py)는 CSV의 필드명을 검사하고 자료 URL·제공기관·이용 조건·수정일을 문서에 보존한다. 데이터의 설명은 **전통 유산**에 관한 것이며 현대인의 행동 규칙이나 식당·대학 생활의 근거로 쓰지 않는다. 생활법령 색인과 별도로 스테이징한다.
+
+공공데이터포털 페이지에서 CSV를 내려받아 `/data/$USER/datasets/culture-symbols.csv`에 둔 경우, 계산 노드에서 다음을 실행한다.
+
+```bash
+cd /data/$USER/repos/swf/Forswf
+source /data/$USER/envs/malmaek/bin/activate
+python -m scripts.ingest_culture_symbols \
+  --input /data/$USER/datasets/culture-symbols.csv \
+  --output /data/$USER/datasets/malmaek-culture-symbols
+
+local_culture=/local_datasets/$USER/malmaek-culture-symbols-${SLURM_JOB_ID:-manual}
+bash scripts/stage_knowledge.sh \
+  /data/$USER/datasets/malmaek-culture-symbols/knowledge.tar.gz "$local_culture"
+python -m scripts.query_knowledge --knowledge "$local_culture/chunks.jsonl" \
+  --query '호랑이 문양은 무엇을 상징하나요?' --retriever bm25
+export HF_HOME=/data/$USER/models/malmaek/hf-cache
+export KORMO_REVISION=547fa40eeb8c69d3c5e278daf906d315c4f8e7ea
+python demo.py --revision "$KORMO_REVISION" \
+  --knowledge "$local_culture/chunks.jsonl" \
+  --culture-question 'What does the tiger motif symbolize in Korean heritage?'
+```
+
+서버에서 CSV를 내려받기 어렵다면 동일한 확인용 문서 압축 파일을 로컬 PC에서 `/data/$USER/datasets/`로 옮겨 스테이징할 수 있다. 원자료를 변환한 날짜와 출처는 압축 파일 안의 각 문서에 들어 있다. 문화재 용어 국·영문 사전(공공데이터포털 3073111)도 이용허락범위 제한 없음으로 표시되고 파일에 2,823행이 있으나, 고고학·미술사 전문 용어가 대부분이므로 이 생활법령·상징사전 색인에 자동으로 섞지 않는다.
 
 AI Hub 대화 어댑터 학습을 마치면 `--compare-adapter`로 기본 KoRMo와 같은 모델에 어댑터를 붙인 KoRMo를 한 번의 모델 로딩으로 비교한다. 표현·인사 3건은 자료 없이 비교하고, `--knowledge`가 있으면 외국인등록 질문도 동일한 검색 발췌로 비교한다. 이 비교는 수동 진단이며 대화 이어 말하기 평가 손실만으로 문화·생활 답변의 개선을 주장하지 않는다.
 

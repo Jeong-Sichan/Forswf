@@ -9,8 +9,12 @@ archive=$1
 destination=$2
 case "$archive" in /data/*) ;; *) echo 'archive must be on /data' >&2; exit 2 ;; esac
 case "$destination" in /local_datasets/*) ;; *) echo 'destination must be under /local_datasets' >&2; exit 2 ;; esac
-if [[ ! -f "$archive" || -e "$destination" ]]; then
-  echo 'archive missing or destination exists' >&2
+if [[ ! -f "$archive" ]]; then
+  echo "archive missing: $archive" >&2
+  exit 2
+fi
+if [[ -e "$destination" ]]; then
+  echo "destination already exists: $destination (choose a new destination)" >&2
   exit 2
 fi
 mkdir -p "$destination"

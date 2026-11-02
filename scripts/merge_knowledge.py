@@ -11,6 +11,9 @@ def main() -> None:
     parser.add_argument("--inputs", type=Path, nargs="+", required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
+    missing = [str(path) for path in args.inputs if not path.is_file()]
+    if missing:
+        parser.error("input documents missing; collect them before merging: " + ", ".join(missing))
     args.output.mkdir(parents=True, exist_ok=True)
     seen = set()
     count = 0

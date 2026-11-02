@@ -133,6 +133,28 @@ def guide_messages(question: str, situation: str, language: str, evidence: list[
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
+def culture_messages(question: str, situation: str, language: str, evidence: list[dict]) -> list[dict[str, str]]:
+    """Explain a cultural object or symbol from a licensed source passage."""
+    if language not in {"ko", "en"} or not question.strip() or not evidence:
+        raise ValueError("Culture questions need a language, question, and retrieved passages")
+    language_rule = ("Answer in clear English. When teaching a Korean term, include Hangul and a Latin-letter pronunciation."
+                     if language == "en" else "쉬운 한국어로 답하세요.")
+    system = (
+        "You explain Korean cultural heritage to international students. Use only the supplied "
+        "passages for factual claims. Explain what the described object or symbol represents; "
+        "do not turn a historical symbol into a universal rule about modern Korean behavior. "
+        "If the passages do not answer the question, say so. Do not put bracket citation numbers "
+        "in the answer; source links appear separately. " + language_rule
+    )
+    excerpts = []
+    for number, row in enumerate(evidence[:3], 1):
+        if any(not isinstance(row.get(key), str) or not row[key].strip() for key in ("title", "url", "text")):
+            raise ValueError("Culture passages need title, URL, and text")
+        excerpts.append(f"[{number}] {row['title']}\nURL: {row['url']}\nExcerpt: {row['text'][:900]}")
+    user = f"Question: {question.strip()}\nSituation: {situation.strip() or 'not specified'}\n\n" + "\n\n".join(excerpts)
+    return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+
+
 def english_rewrite_messages(original: list[dict[str, str]], draft: str, task: str) -> list[dict[str, str]]:
     """Ask the base model to translate/reformat a failed English draft without adding facts."""
     headings = LANGUAGE_RULES["en"].get(task)
